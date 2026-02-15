@@ -285,16 +285,54 @@ klaw start             # Slack bot + scheduler
 └─────────────┘  └─────────────┘  └─────────────┘
 ```
 
-### Kubernetes Analogies
+### Why "Kubernetes for AI Agents"?
 
-| Kubernetes | klaw | Purpose |
-|------------|------|---------|
-| Pod | Agent | Unit of deployment |
-| Deployment | AgentBinding | Desired state specification |
-| Service | Channel | How agents receive work |
-| Node | Node | Where agents run |
-| Namespace | Namespace | Isolation boundary |
-| kubectl | klaw | CLI interface |
+Just as Kubernetes revolutionized container orchestration, klaw brings the same paradigm to AI agents:
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    KUBERNETES vs KLAW                                    │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│   KUBERNETES (Containers)          KLAW (AI Agents)                     │
+│   ════════════════════════         ═══════════════════                  │
+│                                                                          │
+│   Container Image    ────────►     Agent Definition                     │
+│   Pod                ────────►     Agent Instance                       │
+│   Deployment         ────────►     AgentBinding                         │
+│   Service            ────────►     Channel (Slack, CLI, API)            │
+│   Node               ────────►     Node (Worker Machine)                │
+│   Namespace          ────────►     Namespace (Isolation)                │
+│   ConfigMap          ────────►     SOUL.md / Config                     │
+│   kubectl            ────────►     klaw CLI                             │
+│   Scheduler          ────────►     Task Dispatcher                      │
+│   CronJob            ────────►     klaw cron                            │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+**The Problem klaw Solves:**
+
+| Challenge | Kubernetes Solution | klaw Solution |
+|-----------|---------------------|---------------|
+| "Where does my workload run?" | Schedules pods to nodes | Schedules agents to nodes |
+| "How do I scale?" | HPA/VPA for containers | Spawn agents on demand |
+| "How do I isolate?" | Namespaces | Namespaces + workspaces |
+| "How do I update?" | Rolling deployments | Hot-reload agent configs |
+| "How do I communicate?" | Services + Ingress | Channels (Slack, API) |
+| "How do I schedule?" | CronJobs | klaw cron |
+
+**Familiar Patterns:**
+
+```bash
+# Kubernetes                      # klaw
+kubectl get pods                  klaw get agents
+kubectl create deployment         klaw create agent
+kubectl logs pod-name             klaw logs agent-name
+kubectl exec -it pod -- bash      klaw attach agent-name
+kubectl apply -f manifest.yaml    klaw apply -f agent.toml
+kubectl config use-context        klaw context use
+```
 
 ---
 
