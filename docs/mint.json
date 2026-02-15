@@ -2,10 +2,10 @@
   "$schema": "https://mintlify.com/schema.json",
   "name": "klaw",
   "logo": {
-    "dark": "/logo/klaw-dark.svg",
-    "light": "/logo/klaw-light.svg"
+    "dark": "/logo/klaw-dark.png",
+    "light": "/logo/klaw-light.png"
   },
-  "favicon": "/favicon.svg",
+  "favicon": "/favicon.png",
   "colors": {
     "primary": "#22C55E",
     "light": "#4ADE80",
