@@ -24,7 +24,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/license-each::labs-green.svg" alt="License" />
   <img src="https://img.shields.io/badge/go-%3E%3D1.24-00ADD8.svg" alt="Go Version" />
-  <img src="https://img.shields.io/github/stars/eachlabs/klaw?style=social" alt="Stars" />
+  <img src="https://img.shields.io/github/stars/klawsh/klaw.sh?style=social" alt="Stars" />
 </p>
 
 ---
