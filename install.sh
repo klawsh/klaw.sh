@@ -13,7 +13,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Config
-GITHUB_REPO="eachlabs/klaw"
+GITHUB_REPO="klawsh/klaw.sh"
 INSTALL_DIR="/usr/local/bin"
 BINARY_NAME="klaw"
 
