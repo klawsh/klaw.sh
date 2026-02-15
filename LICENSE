@@ -1,0 +1,68 @@
+The klaw project is licensed under a modified Apache License 2.0,
+with additional conditions as outlined below.
+
+================================================================================
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+================================================================================
+
+ADDITIONAL CONDITIONS
+
+In addition to the terms of the Apache License 2.0, the following conditions
+apply to the use of the klaw software:
+
+1. MULTI-TENANT SaaS RESTRICTION
+
+   You may not use the klaw source code to operate a multi-tenant managed
+   service (Software as a Service) where the primary value proposition is
+   providing AI agent orchestration capabilities to third parties, unless
+   you have obtained explicit written authorization from each::labs.
+
+   For clarity, the following uses ARE permitted without additional authorization:
+   - Using klaw internally within your organization
+   - Building and deploying your own AI agents and applications
+   - Offering consulting or professional services using klaw
+   - Creating plugins, extensions, or integrations for klaw
+   - Using klaw as part of a larger application where AI agent orchestration
+     is not the primary service offering
+
+2. ATTRIBUTION REQUIREMENTS
+
+   If you modify and distribute klaw, you must:
+   - Retain all copyright notices and attribution to each::labs
+   - Clearly indicate that your distribution is a modified version
+   - Include a link to the original klaw repository (https://github.com/eachlabs/klaw)
+
+3. TRADEMARK
+
+   "klaw" and the klaw logo are trademarks of each::labs. You may not use these
+   trademarks in a manner that suggests endorsement or affiliation with each::labs
+   without prior written permission, except as required for reasonable and
+   customary use in describing the origin of the software.
+
+================================================================================
+
+ENTERPRISE LICENSE
+
+For organizations requiring:
+- Multi-tenant SaaS deployment rights
+- White-label/OEM licensing
+- Priority support and SLAs
+- Custom features and integrations
+
+Please contact: enterprise@eachlabs.ai
+
+================================================================================
+
+Copyright 2024-2025 each::labs (https://eachlabs.ai)

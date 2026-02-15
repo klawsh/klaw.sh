@@ -1,0 +1,206 @@
+syntax = "proto3";
+
+package klaw;
+
+option go_package = "github.com/eachlabs/klaw/internal/controller/pb;pb";
+
+// ControllerService is the main gRPC service for controller-node communication
+service ControllerService {
+  // Node registration and lifecycle
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+  rpc Deregister(DeregisterRequest) returns (DeregisterResponse);
+
+  // Agent management
+  rpc RegisterAgent(RegisterAgentRequest) returns (RegisterAgentResponse);
+  rpc DeregisterAgent(DeregisterAgentRequest) returns (DeregisterAgentResponse);
+
+  // Task streaming - bidirectional stream for tasks and results
+  rpc TaskStream(stream TaskMessage) returns (stream TaskMessage);
+
+  // Direct task dispatch (for CLI clients)
+  rpc DispatchTask(DispatchTaskRequest) returns (DispatchTaskResponse);
+  rpc GetTaskStatus(GetTaskStatusRequest) returns (GetTaskStatusResponse);
+
+  // Query endpoints
+  rpc ListNodes(ListNodesRequest) returns (ListNodesResponse);
+  rpc ListAgents(ListAgentsRequest) returns (ListAgentsResponse);
+  rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
+}
+
+// --- Node Registration ---
+
+message RegisterRequest {
+  string node_name = 1;
+  string token = 2;
+  map<string, string> labels = 3;
+  string version = 4;
+}
+
+message RegisterResponse {
+  string node_id = 1;
+  string error = 2;
+}
+
+message HeartbeatRequest {
+  string node_id = 1;
+  NodeMetrics metrics = 2;
+}
+
+message NodeMetrics {
+  int32 cpu_percent = 1;
+  int64 memory_used = 2;
+  int64 memory_total = 3;
+  int32 active_tasks = 4;
+}
+
+message HeartbeatResponse {
+  bool ok = 1;
+}
+
+message DeregisterRequest {
+  string node_id = 1;
+}
+
+message DeregisterResponse {
+  bool ok = 1;
+}
+
+// --- Agent Management ---
+
+message RegisterAgentRequest {
+  string node_id = 1;
+  string name = 2;
+  string cluster = 3;
+  string namespace = 4;
+  string description = 5;
+  string model = 6;
+  repeated string skills = 7;
+}
+
+message RegisterAgentResponse {
+  string agent_id = 1;
+  string error = 2;
+}
+
+message DeregisterAgentRequest {
+  string agent_id = 1;
+}
+
+message DeregisterAgentResponse {
+  bool ok = 1;
+}
+
+// --- Task Handling ---
+
+message TaskMessage {
+  string type = 1;  // "task", "result", "progress", "ack"
+
+  // Task details (type = "task")
+  string task_id = 2;
+  string agent_name = 3;
+  string prompt = 4;
+  map<string, string> metadata = 5;
+
+  // Result details (type = "result")
+  string result = 6;
+  string error = 7;
+
+  // Progress details (type = "progress")
+  string status = 8;
+  int32 progress_percent = 9;
+}
+
+message DispatchTaskRequest {
+  string token = 1;
+  string agent_name = 2;
+  string prompt = 3;
+  map<string, string> metadata = 4;
+  bool wait = 5;
+  int32 timeout_seconds = 6;
+}
+
+message DispatchTaskResponse {
+  string task_id = 1;
+  string status = 2;
+  string result = 3;
+  string error = 4;
+}
+
+message GetTaskStatusRequest {
+  string task_id = 1;
+}
+
+message GetTaskStatusResponse {
+  Task task = 1;
+}
+
+// --- Query Messages ---
+
+message ListNodesRequest {}
+
+message ListNodesResponse {
+  repeated Node nodes = 1;
+}
+
+message ListAgentsRequest {
+  string node_id = 1;  // optional filter
+}
+
+message ListAgentsResponse {
+  repeated Agent agents = 1;
+}
+
+message ListTasksRequest {
+  string status = 1;  // optional filter: pending, dispatched, completed, failed
+  string agent_name = 2;  // optional filter
+}
+
+message ListTasksResponse {
+  repeated Task tasks = 1;
+}
+
+// --- Common Types ---
+
+message Node {
+  string id = 1;
+  string name = 2;
+  string address = 3;
+  map<string, string> labels = 4;
+  string status = 5;
+  string version = 6;
+  int64 joined_at = 7;  // unix timestamp
+  int64 last_seen = 8;  // unix timestamp
+  repeated string agent_ids = 9;
+}
+
+message Agent {
+  string id = 1;
+  string name = 2;
+  string node_id = 3;
+  string cluster = 4;
+  string namespace = 5;
+  string description = 6;
+  string model = 7;
+  repeated string skills = 8;
+  string status = 9;
+  int64 created_at = 10;
+  int64 last_active = 11;
+}
+
+message Task {
+  string id = 1;
+  string type = 2;
+  string agent_id = 3;
+  string agent_name = 4;
+  string node_id = 5;
+  string prompt = 6;
+  int32 priority = 7;
+  string status = 8;
+  string result = 9;
+  string error = 10;
+  map<string, string> metadata = 11;
+  int64 created_at = 12;
+  int64 started_at = 13;
+  int64 finished_at = 14;
+}
