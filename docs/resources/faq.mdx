@@ -1,0 +1,179 @@
+---
+title: FAQ
+description: 'Frequently asked questions about klaw'
+---
+
+## General
+
+<AccordionGroup>
+  <Accordion icon="circle-question" title="What is klaw?">
+    klaw is an open-source platform for deploying and managing AI agents at scale. It brings Kubernetes-style orchestration to AI agents—same familiar patterns, but for intelligent agents instead of containers.
+  </Accordion>
+
+  <Accordion icon="circle-question" title="Why is it called klaw?">
+    "klaw" represents the tool that lets you grab and control AI agents, similar to how kubectl lets you control Kubernetes. It's also a nod to the Kubernetes ecosystem (k8s, k3s, etc.).
+  </Accordion>
+
+  <Accordion icon="circle-question" title="How is klaw different from LangChain or CrewAI?">
+    - **Single binary**: No Python setup, no dependencies
+    - **Distributed by design**: Built-in controller-node architecture
+    - **Multi-channel**: Native Slack integration, not just CLI
+    - **Production-ready**: Namespaces, RBAC, observability built-in
+    - **300+ models**: Any LLM through unified API
+  </Accordion>
+
+  <Accordion icon="circle-question" title="Is klaw production-ready?">
+    klaw is currently in public alpha. It's being used in production by early adopters, but expect some rough edges and breaking changes before 1.0.
+  </Accordion>
+</AccordionGroup>
+
+## Installation & Setup
+
+<AccordionGroup>
+  <Accordion icon="circle-question" title="What are the system requirements?">
+    - **OS**: macOS, Linux, or Windows (WSL2)
+    - **Architecture**: amd64 or arm64
+    - **Memory**: 256MB minimum, 1GB recommended
+    - **Disk**: 50MB for binary
+    - **Network**: Outbound HTTPS access
+  </Accordion>
+
+  <Accordion icon="circle-question" title="Which LLM providers are supported?">
+    - **Anthropic** (Claude): Direct API access
+    - **OpenRouter**: 100+ models through gateway
+    - **each::labs**: 300+ models unified API
+
+    More providers coming soon.
+  </Accordion>
+
+  <Accordion icon="circle-question" title="Do I need Docker or Kubernetes?">
+    No. klaw is a single binary with no external dependencies. You can optionally use Podman for containerized agents, but it's not required.
+  </Accordion>
+</AccordionGroup>
+
+## Usage
+
+<AccordionGroup>
+  <Accordion icon="circle-question" title="What's the difference between `klaw chat` and `klaw start`?">
+    - `klaw chat`: Interactive CLI session for one user
+    - `klaw start`: Full platform with Slack integration, cron scheduler, and multi-user support
+  </Accordion>
+
+  <Accordion icon="circle-question" title="Can I use multiple agents?">
+    Yes. Create multiple agents with different configurations, skills, and purposes. Use the orchestrator to route messages to the right agent automatically.
+  </Accordion>
+
+  <Accordion icon="circle-question" title="How do agents communicate with each other?">
+    Agents can spawn sub-agents using the `agent_spawn` tool, share context through workspace files, or communicate via Slack channels in team deployments.
+  </Accordion>
+
+  <Accordion icon="circle-question" title="Can I schedule recurring tasks?">
+    Yes. Use the cron system:
+    ```bash
+    klaw cron create daily-report \
+      --schedule "0 9 * * *" \
+      --agent reporter \
+      --task "Generate daily status report"
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Deployment
+
+<AccordionGroup>
+  <Accordion icon="circle-question" title="Can I run klaw in containers?">
+    Yes. klaw supports running agents in isolated Podman containers:
+    ```bash
+    klaw build
+    klaw run myagent --task "..."
+    ```
+  </Accordion>
+
+  <Accordion icon="circle-question" title="How do I scale to multiple machines?">
+    Use distributed mode:
+    ```bash
+    # On controller
+    klaw controller start --port 9090
+
+    # On workers
+    klaw node join controller:9090 --token xxx
+    ```
+  </Accordion>
+
+  <Accordion icon="circle-question" title="What's the difference between clusters and namespaces?">
+    - **Cluster**: Top-level isolation (per organization)
+    - **Namespace**: Sub-division within a cluster (per team/project)
+
+    Similar to Kubernetes: namespaces provide logical isolation within a cluster.
+  </Accordion>
+</AccordionGroup>
+
+## Security
+
+<AccordionGroup>
+  <Accordion icon="circle-question" title="Are my API keys secure?">
+    API keys are stored in environment variables or config files. They're never sent to klaw servers—all LLM calls go directly to the provider.
+  </Accordion>
+
+  <Accordion icon="circle-question" title="What can agents access on my system?">
+    By default, agents can:
+    - Read/write files in their working directory
+    - Execute bash commands
+    - Make web requests
+
+    Limit access by restricting tools and using container mode.
+  </Accordion>
+
+  <Accordion icon="circle-question" title="How do I restrict agent permissions?">
+    1. Limit tools when creating agents
+    2. Set a specific working directory
+    3. Use container mode for isolation
+    4. Configure orchestrator rules for routing
+  </Accordion>
+</AccordionGroup>
+
+## Licensing
+
+<AccordionGroup>
+  <Accordion icon="circle-question" title="Is klaw open source?">
+    klaw is source-available under the each::labs License. The code is open, but there are some restrictions on commercial SaaS use.
+  </Accordion>
+
+  <Accordion icon="circle-question" title="Can I use klaw for free?">
+    Yes, klaw is free for:
+    - Internal business use
+    - Personal projects
+    - Building your own AI applications
+    - Consulting and professional services
+  </Accordion>
+
+  <Accordion icon="circle-question" title="When do I need a commercial license?">
+    You need a license for:
+    - Multi-tenant SaaS offerings using klaw
+    - White-label or OEM distribution
+
+    Contact enterprise@eachlabs.ai for licensing.
+  </Accordion>
+</AccordionGroup>
+
+## Contributing
+
+<AccordionGroup>
+  <Accordion icon="circle-question" title="How can I contribute?">
+    See [CONTRIBUTING.md](https://github.com/klawsh/klaw.sh/blob/main/CONTRIBUTING.md) for guidelines. Contributions welcome for:
+    - Bug fixes
+    - New features
+    - Documentation
+    - Tools and skills
+  </Accordion>
+
+  <Accordion icon="circle-question" title="Where do I report bugs?">
+    [GitHub Issues](https://github.com/klawsh/klaw.sh/issues)
+
+    Include:
+    - klaw version
+    - OS and architecture
+    - Steps to reproduce
+    - Relevant logs
+  </Accordion>
+</AccordionGroup>

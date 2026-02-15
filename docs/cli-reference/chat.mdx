@@ -1,0 +1,159 @@
+---
+title: chat
+description: 'Interactive terminal chat with AI agents'
+---
+
+## Usage
+
+```bash
+klaw chat [flags]
+```
+
+## Description
+
+Start an interactive chat session with an AI agent. This is the primary way to interact with klaw for development and exploration.
+
+## Flags
+
+| Flag | Short | Description | Default |
+|------|-------|-------------|---------|
+| `--model` | `-m` | Model to use | Auto-detected |
+| `--provider` | `-p` | Provider: anthropic, openrouter, eachlabs | Auto-detected |
+| `--agent` | `-a` | Agent name to use | default |
+| `--tui` | | Use TUI mode (Bubble Tea) | false |
+| `--simple` | | Simple terminal mode (no styling) | false |
+
+## Examples
+
+### Basic Chat
+
+```bash
+klaw chat
+```
+
+### Specify Model
+
+```bash
+klaw chat --model claude-sonnet-4-20250514
+klaw chat --model gpt-4o
+```
+
+### Use TUI Mode
+
+```bash
+klaw chat --tui
+```
+
+### Chat with Specific Agent
+
+```bash
+klaw chat --agent coder
+klaw chat --agent researcher
+```
+
+### Specify Provider
+
+```bash
+klaw chat --provider anthropic
+klaw chat --provider openrouter
+klaw chat --provider eachlabs
+```
+
+## Provider Auto-Detection
+
+klaw automatically detects the provider based on available environment variables:
+
+1. `OPENROUTER_API_KEY` → OpenRouter
+2. `EACHLABS_API_KEY` → each::labs
+3. `ANTHROPIC_API_KEY` → Anthropic
+
+Override with `--provider` flag.
+
+## Model Auto-Detection
+
+If no model is specified, klaw uses defaults based on provider:
+
+| Provider | Default Model |
+|----------|---------------|
+| Anthropic | claude-sonnet-4-20250514 |
+| OpenRouter | anthropic/claude-sonnet-4 |
+| each::labs | anthropic/claude-sonnet-4-5 |
+
+## Chat Modes
+
+### Terminal Mode (Default)
+
+Styled terminal output with colors and formatting:
+
+```
+klaw v1.0.0 - The Kubernetes for AI Agents
+Using model: claude-sonnet-4-20250514
+
+> Hello!
+
+Hello! How can I help you today?
+
+> _
+```
+
+### TUI Mode
+
+Rich terminal UI with Bubble Tea:
+
+```bash
+klaw chat --tui
+```
+
+Features:
+- Syntax highlighting
+- Scrollable history
+- Progress indicators
+- Keyboard shortcuts
+
+### Simple Mode
+
+Basic terminal without styling (for compatibility):
+
+```bash
+klaw chat --simple
+```
+
+## Tool Execution
+
+During chat, agents can use tools:
+
+```
+> List the files in this directory
+
+[Tool: glob] Finding files...
+├── cmd/
+├── internal/
+├── go.mod
+└── README.md
+
+This directory contains a Go project with...
+```
+
+## Keyboard Shortcuts
+
+| Key | Action |
+|-----|--------|
+| `Enter` | Send message |
+| `Shift+Enter` | New line |
+| `Ctrl+C` | Exit |
+| `Ctrl+L` | Clear screen |
+| `Up/Down` | History navigation |
+
+## Environment Variables
+
+```bash
+ANTHROPIC_API_KEY    # Required for Anthropic
+OPENROUTER_API_KEY   # Required for OpenRouter
+EACHLABS_API_KEY     # Required for each::labs
+KLAW_MODEL           # Override default model
+```
+
+## See Also
+
+- [start](/cli-reference/start) - Start full platform
+- [dispatch](/cli-reference/dispatch) - One-shot task execution

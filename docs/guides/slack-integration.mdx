@@ -1,0 +1,299 @@
+---
+title: Slack Integration
+description: 'Deploy your agents to Slack for team collaboration'
+---
+
+## Overview
+
+klaw provides native Slack integration, allowing your team to interact with AI agents directly in Slack channels and threads. This guide walks you through setting up and configuring the integration.
+
+## Prerequisites
+
+- klaw installed and configured
+- Slack workspace admin access
+- API key configured
+
+## Step 1: Create a Slack App
+
+<Steps>
+  <Step title="Go to Slack API">
+    Visit [api.slack.com/apps](https://api.slack.com/apps) and click **Create New App**.
+  </Step>
+  <Step title="Choose creation method">
+    Select **From scratch** and give your app a name (e.g., "klaw") and select your workspace.
+  </Step>
+  <Step title="Enable Socket Mode">
+    Go to **Socket Mode** in the sidebar and enable it. Generate an **App-Level Token** with `connections:write` scope. Save this as `SLACK_APP_TOKEN`.
+  </Step>
+  <Step title="Configure OAuth scopes">
+    Go to **OAuth & Permissions** and add these **Bot Token Scopes**:
+    - `app_mentions:read` - Receive @mentions
+    - `chat:write` - Send messages
+    - `channels:history` - Read channel messages
+    - `channels:read` - View channel info
+    - `groups:history` - Read private channel messages
+    - `groups:read` - View private channel info
+    - `im:history` - Read DMs
+    - `im:read` - View DM info
+    - `im:write` - Send DMs
+    - `users:read` - View user info
+  </Step>
+  <Step title="Enable Events">
+    Go to **Event Subscriptions** and enable events. Subscribe to these bot events:
+    - `app_mention` - When someone @mentions the bot
+    - `message.channels` - Messages in channels
+    - `message.groups` - Messages in private channels
+    - `message.im` - Direct messages
+  </Step>
+  <Step title="Install to Workspace">
+    Go to **Install App** and click **Install to Workspace**. Save the **Bot User OAuth Token** as `SLACK_BOT_TOKEN`.
+  </Step>
+</Steps>
+
+## Step 2: Configure Environment
+
+Set the required environment variables:
+
+```bash
+export SLACK_BOT_TOKEN=xoxb-...
+export SLACK_APP_TOKEN=xapp-...
+export ANTHROPIC_API_KEY=sk-ant-...  # Or your preferred provider
+```
+
+For permanent configuration, add to your shell profile or `~/.klaw/config.toml`:
+
+```toml
+[channel.slack]
+enabled = true
+bot_token = "${SLACK_BOT_TOKEN}"
+app_token = "${SLACK_APP_TOKEN}"
+```
+
+## Step 3: Start klaw
+
+Start the klaw platform with Slack integration:
+
+```bash
+klaw start
+```
+
+You should see:
+
+```
+╭─────────────────────────────────────────╮
+│               klaw                      │
+│        AI Employee Platform            │
+╰─────────────────────────────────────────╯
+Provider:  anthropic
+Model:     claude-sonnet-4-20250514
+Namespace: default/default
+
+Slack bot active. Listening for messages...
+Scheduler running. Cron jobs will execute automatically.
+
+Press Ctrl+C to stop
+```
+
+## Step 4: Invite the Bot
+
+In Slack, invite your bot to channels:
+
+1. Go to the channel where you want the bot
+2. Type `/invite @klaw` (or your bot's name)
+3. The bot is now active in that channel
+
+## Interacting with the Bot
+
+### @Mention the Bot
+
+```
+@klaw help me understand this error message
+```
+
+### Thread Conversations
+
+Start a thread and continue the conversation:
+
+```
+User: @klaw explain this code
+Bot:  [Explanation in thread]
+User: Can you refactor it?
+Bot:  [Refactored code in same thread]
+```
+
+The bot maintains context within threads.
+
+### Route to Specific Agents
+
+Use `@agent` syntax to route to specific agents:
+
+```
+@klaw @researcher find best practices for Go error handling
+@klaw @coder implement those patterns
+```
+
+## Setting Up Agents
+
+Create agents for your Slack workspace:
+
+```bash
+# Create agents
+klaw create agent coder \
+  --model claude-sonnet-4-20250514 \
+  --skills code-exec,git
+
+klaw create agent researcher \
+  --model claude-sonnet-4-20250514 \
+  --skills web-search,browser
+
+klaw create agent devops \
+  --model claude-sonnet-4-20250514 \
+  --skills docker,git
+```
+
+View your agents:
+
+```bash
+klaw get agents
+```
+
+## Scheduled Tasks (Cron)
+
+Set up automated tasks in Slack:
+
+### Create from CLI
+
+```bash
+klaw cron create daily-standup \
+  --schedule "0 9 * * 1-5" \
+  --agent reporter \
+  --task "Generate daily standup summary from yesterday's activity"
+```
+
+### Create from Slack
+
+In Slack, tell the bot to create a cron job:
+
+```
+@klaw Create a cron job that runs every morning at 9am
+to summarize the #engineering channel activity
+```
+
+The bot will use the `cron_create` tool automatically.
+
+### Manage Cron Jobs
+
+```bash
+klaw cron list
+klaw cron enable daily-standup
+klaw cron disable daily-standup
+```
+
+## Channel-Specific Monitoring
+
+Set up monitoring for specific channels:
+
+```
+@klaw Monitor this channel every 5 minutes and alert
+if anyone mentions "urgent" or "production issue"
+```
+
+The bot will create a cron job that:
+1. Reads new messages from the channel
+2. Analyzes them based on your criteria
+3. Responds in threads when matches are found
+
+## Configuration Options
+
+### Namespace Binding
+
+Bind Slack channels to specific namespaces:
+
+```yaml
+apiVersion: klaw.sh/v1
+kind: ChannelBinding
+metadata:
+  name: slack-engineering
+  namespace: engineering
+spec:
+  channel: slack
+  config:
+    allowed_channels:
+      - C0123456789  # #engineering
+    default_agent: coder
+```
+
+### Orchestrator Rules
+
+Configure message routing:
+
+```toml
+[orchestrator]
+mode = "hybrid"
+default_agent = "coder"
+
+[[orchestrator.rules]]
+pattern = "(?i)(deploy|kubernetes|docker)"
+agent = "devops"
+
+[[orchestrator.rules]]
+pattern = "(?i)(research|find|search)"
+agent = "researcher"
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion icon="lock" title="Limit channel access">
+    Only invite the bot to channels where it's needed. This reduces noise and improves response relevance.
+  </Accordion>
+  <Accordion icon="thread" title="Use threads">
+    Encourage users to start threads for conversations. This keeps channels clean and maintains context better.
+  </Accordion>
+  <Accordion icon="user-group" title="Set up dedicated channels">
+    Consider creating dedicated channels like `#klaw-tasks` or `#ai-assistant` for AI interactions.
+  </Accordion>
+  <Accordion icon="clock" title="Configure rate limits">
+    For busy channels, consider rate limiting to prevent overwhelming the system.
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion icon="circle-xmark" title="Bot doesn't respond">
+    1. Check if the bot is invited to the channel
+    2. Verify Socket Mode is enabled in Slack app settings
+    3. Check `klaw start` output for errors
+    4. Ensure tokens are correctly set
+  </Accordion>
+  <Accordion icon="clock" title="Slow responses">
+    1. Check your API provider's status
+    2. Consider using a faster model (Haiku for simple tasks)
+    3. Reduce the number of tools/skills for faster processing
+  </Accordion>
+  <Accordion icon="triangle-exclamation" title="Missing messages">
+    1. Ensure `channels:history` scope is granted
+    2. Check if the bot has access to the channel
+    3. For private channels, add `groups:history` scope
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Multi-Agent Workflows"
+    icon="sitemap"
+    href="/guides/multi-agent-workflows"
+  >
+    Orchestrate multiple agents
+  </Card>
+  <Card
+    title="Distributed Deployment"
+    icon="server"
+    href="/guides/distributed-deployment"
+  >
+    Scale your Slack bot
+  </Card>
+</CardGroup>

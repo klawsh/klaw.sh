@@ -1,0 +1,363 @@
+---
+title: Orchestrator
+description: 'Intelligent message routing to agents'
+---
+
+## What is the Orchestrator?
+
+The **orchestrator** is the routing layer that decides which agent should handle incoming messages. It sits between channels and agents, analyzing messages and dispatching them to the appropriate destination.
+
+In Kubernetes terms, the orchestrator is like an Ingress controller—it routes traffic to the right service based on rules.
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        ORCHESTRATOR                          │
+│                                                              │
+│  ┌──────────┐    ┌──────────────┐    ┌──────────────┐      │
+│  │  Rules   │ OR │     AI       │ OR │   Hybrid     │      │
+│  │  Engine  │    │   Router     │    │    Mode      │      │
+│  └─────┬────┘    └──────┬───────┘    └──────┬───────┘      │
+│        │                │                   │               │
+│        └────────────────┼───────────────────┘               │
+│                         │                                   │
+│                         ▼                                   │
+│              ┌───────────────────┐                         │
+│              │  Agent Selection  │                         │
+│              └─────────┬─────────┘                         │
+│                        │                                   │
+└────────────────────────┼───────────────────────────────────┘
+                         │
+         ┌───────────────┼───────────────┐
+         ▼               ▼               ▼
+    ┌─────────┐    ┌─────────┐    ┌─────────┐
+    │  Coder  │    │Researcher│   │  DevOps │
+    └─────────┘    └─────────┘    └─────────┘
+```
+
+## Routing Modes
+
+### Disabled (Default)
+
+All messages go to the default agent:
+
+```toml
+[orchestrator]
+mode = "disabled"
+default_agent = "default"
+```
+
+### Rules-Based
+
+Route messages based on regex patterns:
+
+```toml
+[orchestrator]
+mode = "rules"
+default_agent = "default"
+
+[[orchestrator.rules]]
+pattern = "(?i)(code|bug|fix|implement)"
+agent = "coder"
+
+[[orchestrator.rules]]
+pattern = "(?i)(research|find|search)"
+agent = "researcher"
+
+[[orchestrator.rules]]
+pattern = "(?i)(deploy|docker|kubernetes)"
+agent = "devops"
+```
+
+### AI-Based
+
+Let the LLM decide which agent to use:
+
+```toml
+[orchestrator]
+mode = "ai"
+default_agent = "default"
+model = "claude-haiku-3"  # Fast, cheap model for routing
+```
+
+The orchestrator sends a prompt like:
+
+```
+Given these available agents:
+- coder: Writes and debugs code
+- researcher: Searches and analyzes information
+- devops: Manages infrastructure
+
+Which agent should handle this message?
+User: "Find the best practices for Go error handling"
+
+Respond with just the agent name.
+```
+
+### Hybrid
+
+Combine rules and AI for best results:
+
+```toml
+[orchestrator]
+mode = "hybrid"
+default_agent = "default"
+model = "claude-haiku-3"
+
+# Rules are checked first
+[[orchestrator.rules]]
+pattern = "(?i)^deploy"
+agent = "devops"
+
+# AI handles everything else
+```
+
+## Manual Routing
+
+Users can override routing with explicit mentions:
+
+```
+# Route to specific agent
+@coder fix the authentication bug
+
+# Route to all agents
+@all summarize your capabilities
+
+# Default routing (orchestrator decides)
+help me understand this codebase
+```
+
+## Configuration
+
+### Namespace-Level Orchestration
+
+In distributed mode, orchestration is configured per-namespace:
+
+```yaml
+# namespace.yaml
+apiVersion: klaw.sh/v1
+kind: Namespace
+metadata:
+  name: engineering
+spec:
+  orchestrator:
+    mode: hybrid
+    default_agent: coder
+    rules:
+      - pattern: "(?i)deploy"
+        agent: devops
+      - pattern: "(?i)research"
+        agent: researcher
+```
+
+### Agent Bindings
+
+Agents are bound to namespaces with triggers:
+
+```yaml
+# agent-binding.yaml
+apiVersion: klaw.sh/v1
+kind: AgentBinding
+metadata:
+  name: coder-binding
+  namespace: engineering
+spec:
+  agent: coder
+  triggers:
+    - pattern: "code|bug|fix"
+    - keywords: ["implement", "refactor", "debug"]
+  skills:
+    - code-exec
+    - git
+```
+
+## Routing Flow
+
+<Steps>
+  <Step title="Message Received">
+    A message arrives through a channel (Slack, CLI, API).
+  </Step>
+  <Step title="Manual Check">
+    Check for `@agent` syntax. If present, route directly.
+  </Step>
+  <Step title="Rules Check">
+    If mode is `rules` or `hybrid`, check regex patterns.
+  </Step>
+  <Step title="AI Routing">
+    If mode is `ai` or `hybrid` (and no rule matched), ask LLM.
+  </Step>
+  <Step title="Default Fallback">
+    If nothing matches, use the default agent.
+  </Step>
+  <Step title="Dispatch">
+    Create a proxy channel and dispatch to the selected agent.
+  </Step>
+</Steps>
+
+## Proxy Channels
+
+The orchestrator creates isolated channels for each message:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     SLACK CHANNEL                            │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │  User: @klaw fix the login bug                          │ │
+│  │                  │                                       │ │
+│  │                  ▼                                       │ │
+│  │         ┌───────────────┐                               │ │
+│  │         │  Orchestrator │                               │ │
+│  │         └───────┬───────┘                               │ │
+│  │                 │                                        │ │
+│  │         ┌───────▼───────┐                               │ │
+│  │         │ Proxy Channel │◄──── Isolated context         │ │
+│  │         │   (coder)     │                               │ │
+│  │         └───────┬───────┘                               │ │
+│  │                 │                                        │ │
+│  │                 ▼                                       │ │
+│  │  klaw: I'll look into that login bug...                 │ │
+│  └─────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Multi-Agent Responses
+
+When routing to `@all`, responses are aggregated:
+
+```
+User: @all what's your specialty?
+
+┌─────────────────────────────────────────┐
+│ coder                                    │
+│ I specialize in writing and debugging   │
+│ code across multiple languages.         │
+├─────────────────────────────────────────┤
+│ researcher                               │
+│ I focus on finding information and      │
+│ analyzing data from various sources.    │
+├─────────────────────────────────────────┤
+│ devops                                   │
+│ I handle infrastructure, deployments,   │
+│ and container management.               │
+└─────────────────────────────────────────┘
+```
+
+## Conversation Context
+
+The orchestrator maintains routing context per conversation:
+
+```
+Thread 1: Started with @coder
+  → All subsequent messages route to coder
+
+Thread 2: Started with general question
+  → Routed to researcher
+  → User later says @devops
+  → Switches to devops for rest of thread
+```
+
+### Sticky Routing
+
+Enable sticky routing to maintain agent affinity:
+
+```toml
+[orchestrator]
+mode = "rules"
+sticky = true  # Keep routing to same agent within conversation
+```
+
+## Monitoring Routing
+
+### View Routing Decisions
+
+```bash
+klaw logs --component orchestrator
+```
+
+Output:
+```
+2024-12-14T10:00:00Z INFO  Routing message
+  message="fix the login bug"
+  mode=hybrid
+  rule_match=true
+  pattern="(?i)(code|bug|fix)"
+  agent=coder
+
+2024-12-14T10:00:01Z INFO  Routing message
+  message="research best practices"
+  mode=hybrid
+  rule_match=false
+  ai_decision=researcher
+  agent=researcher
+```
+
+### Routing Metrics
+
+```bash
+klaw get metrics orchestrator
+```
+
+```
+Routing Decisions (last hour):
+  Total:     150
+  By Rules:   80 (53%)
+  By AI:      50 (33%)
+  Manual:     15 (10%)
+  Default:     5 (3%)
+
+Agent Distribution:
+  coder:       60 (40%)
+  researcher:  45 (30%)
+  devops:      30 (20%)
+  default:     15 (10%)
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion icon="bolt" title="Use rules for performance">
+    Rules-based routing is instant. Use it for common patterns to avoid AI latency.
+  </Accordion>
+  <Accordion icon="brain" title="Use AI for edge cases">
+    Hybrid mode gives you the best of both worlds—fast rules and smart fallback.
+  </Accordion>
+  <Accordion icon="tag" title="Name agents clearly">
+    Agent names should clearly indicate their purpose for accurate AI routing.
+  </Accordion>
+  <Accordion icon="check" title="Test routing thoroughly">
+    Test your rules with various message patterns to ensure correct routing.
+  </Accordion>
+</AccordionGroup>
+
+## Orchestrator vs Direct Chat
+
+| Feature | With Orchestrator | Direct Chat |
+|---------|-------------------|-------------|
+| Multiple agents | Yes | No |
+| Auto-routing | Yes | No |
+| Manual selection | Yes | N/A |
+| Latency | Higher (routing step) | Lower |
+| Complexity | Higher | Lower |
+
+Use direct chat (`klaw chat`) for single-agent scenarios.
+Use orchestrator for multi-agent deployments (Slack, distributed mode).
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Memory"
+    icon="brain"
+    href="/concepts/memory"
+  >
+    Learn about persistent context
+  </Card>
+  <Card
+    title="Multi-Agent Workflows"
+    icon="sitemap"
+    href="/guides/multi-agent-workflows"
+  >
+    Build complex multi-agent systems
+  </Card>
+</CardGroup>

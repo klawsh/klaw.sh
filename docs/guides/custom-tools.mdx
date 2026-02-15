@@ -1,0 +1,442 @@
+---
+title: Custom Tools
+description: 'Build custom tools to extend agent capabilities'
+---
+
+## Overview
+
+Tools are the actions agents can take. While klaw includes many built-in tools, you can create custom tools for specialized needs—connecting to internal APIs, integrating with proprietary systems, or implementing domain-specific operations.
+
+## Tool Interface
+
+Every tool implements this interface:
+
+```go
+type Tool interface {
+    // Name returns the unique tool identifier
+    Name() string
+
+    // Description explains what the tool does (shown to LLM)
+    Description() string
+
+    // Schema returns JSON schema for parameters
+    Schema() map[string]interface{}
+
+    // Execute runs the tool with provided input
+    Execute(ctx context.Context, input map[string]interface{}) (string, error)
+}
+```
+
+## Creating a Basic Tool
+
+### Example: Weather Tool
+
+```go
+package tools
+
+import (
+    "context"
+    "encoding/json"
+    "fmt"
+    "net/http"
+)
+
+type WeatherTool struct {
+    apiKey string
+}
+
+func NewWeatherTool(apiKey string) *WeatherTool {
+    return &WeatherTool{apiKey: apiKey}
+}
+
+func (t *WeatherTool) Name() string {
+    return "weather"
+}
+
+func (t *WeatherTool) Description() string {
+    return "Get current weather for a location. Returns temperature, conditions, and humidity."
+}
+
+func (t *WeatherTool) Schema() map[string]interface{} {
+    return map[string]interface{}{
+        "type": "object",
+        "properties": map[string]interface{}{
+            "location": map[string]interface{}{
+                "type":        "string",
+                "description": "City name or coordinates",
+            },
+            "units": map[string]interface{}{
+                "type":        "string",
+                "enum":        []string{"celsius", "fahrenheit"},
+                "default":     "celsius",
+                "description": "Temperature units",
+            },
+        },
+        "required": []string{"location"},
+    }
+}
+
+func (t *WeatherTool) Execute(ctx context.Context, input map[string]interface{}) (string, error) {
+    location, ok := input["location"].(string)
+    if !ok {
+        return "", fmt.Errorf("location is required")
+    }
+
+    units := "celsius"
+    if u, ok := input["units"].(string); ok {
+        units = u
+    }
+
+    // Call weather API
+    resp, err := http.Get(fmt.Sprintf(
+        "https://api.weather.com/v1/current?location=%s&units=%s&key=%s",
+        location, units, t.apiKey,
+    ))
+    if err != nil {
+        return "", fmt.Errorf("weather API error: %w", err)
+    }
+    defer resp.Body.Close()
+
+    var data struct {
+        Temperature float64 `json:"temperature"`
+        Conditions  string  `json:"conditions"`
+        Humidity    int     `json:"humidity"`
+    }
+    if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+        return "", err
+    }
+
+    return fmt.Sprintf(
+        "Weather in %s: %.1f°%s, %s, %d%% humidity",
+        location, data.Temperature,
+        string(units[0]), data.Conditions, data.Humidity,
+    ), nil
+}
+```
+
+## Registering Custom Tools
+
+### Add to Registry
+
+```go
+package main
+
+import (
+    "github.com/klawsh/klaw.sh/internal/tool"
+    "myapp/tools"
+)
+
+func main() {
+    // Create registry with default tools
+    registry := tool.DefaultRegistry("/workspace")
+
+    // Add custom tools
+    registry.Register(tools.NewWeatherTool(os.Getenv("WEATHER_API_KEY")))
+    registry.Register(tools.NewDatabaseTool(dbConn))
+    registry.Register(tools.NewSlackNotifyTool(slackClient))
+
+    // Use registry with agent
+    agent := agent.New(agent.Config{
+        Tools: registry,
+        // ...
+    })
+}
+```
+
+### Via Skill
+
+Package your tool as a skill:
+
+```toml
+# skill.toml
+name = "weather"
+version = "1.0.0"
+description = "Weather information tool"
+
+tools = ["weather"]
+
+system_prompt = """
+You have access to the weather tool.
+Use it when users ask about weather conditions.
+Always include temperature and conditions in responses.
+"""
+
+[config]
+api_key = { type = "string", required = true, env = "WEATHER_API_KEY" }
+```
+
+## Tool Design Patterns
+
+### Input Validation
+
+Always validate inputs:
+
+```go
+func (t *MyTool) Execute(ctx context.Context, input map[string]interface{}) (string, error) {
+    // Validate required fields
+    id, ok := input["id"].(string)
+    if !ok || id == "" {
+        return "", fmt.Errorf("id is required and must be a non-empty string")
+    }
+
+    // Validate numeric ranges
+    count, _ := input["count"].(float64)  // JSON numbers are float64
+    if count < 1 || count > 100 {
+        return "", fmt.Errorf("count must be between 1 and 100")
+    }
+
+    // Continue with execution...
+}
+```
+
+### Error Handling
+
+Return clear, actionable errors:
+
+```go
+func (t *APITool) Execute(ctx context.Context, input map[string]interface{}) (string, error) {
+    resp, err := t.client.Call(input)
+    if err != nil {
+        // Provide context for the LLM
+        if errors.Is(err, context.DeadlineExceeded) {
+            return "", fmt.Errorf("API call timed out after 30s. Try with a simpler query")
+        }
+        if apiErr, ok := err.(*APIError); ok {
+            return "", fmt.Errorf("API error (%d): %s. %s",
+                apiErr.Code, apiErr.Message, apiErr.Suggestion)
+        }
+        return "", fmt.Errorf("unexpected error: %w", err)
+    }
+    return formatResponse(resp), nil
+}
+```
+
+### Timeouts
+
+Respect context cancellation:
+
+```go
+func (t *LongRunningTool) Execute(ctx context.Context, input map[string]interface{}) (string, error) {
+    // Create timeout context
+    ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+    defer cancel()
+
+    resultCh := make(chan string, 1)
+    errCh := make(chan error, 1)
+
+    go func() {
+        result, err := t.doWork(input)
+        if err != nil {
+            errCh <- err
+        } else {
+            resultCh <- result
+        }
+    }()
+
+    select {
+    case result := <-resultCh:
+        return result, nil
+    case err := <-errCh:
+        return "", err
+    case <-ctx.Done():
+        return "", fmt.Errorf("operation cancelled: %w", ctx.Err())
+    }
+}
+```
+
+### Streaming Results
+
+For long operations, provide progress:
+
+```go
+func (t *ProcessingTool) Execute(ctx context.Context, input map[string]interface{}) (string, error) {
+    items := input["items"].([]interface{})
+    var results []string
+
+    for i, item := range items {
+        // Check cancellation
+        select {
+        case <-ctx.Done():
+            return fmt.Sprintf("Processed %d/%d before cancellation", i, len(items)), ctx.Err()
+        default:
+        }
+
+        result, err := t.processItem(item)
+        if err != nil {
+            results = append(results, fmt.Sprintf("Item %d: ERROR - %v", i, err))
+        } else {
+            results = append(results, fmt.Sprintf("Item %d: %s", i, result))
+        }
+    }
+
+    return strings.Join(results, "\n"), nil
+}
+```
+
+## Common Tool Types
+
+### HTTP API Tool
+
+```go
+type HTTPTool struct {
+    client  *http.Client
+    baseURL string
+}
+
+func (t *HTTPTool) Execute(ctx context.Context, input map[string]interface{}) (string, error) {
+    method := input["method"].(string)
+    path := input["path"].(string)
+
+    req, err := http.NewRequestWithContext(ctx, method, t.baseURL+path, nil)
+    if err != nil {
+        return "", err
+    }
+
+    resp, err := t.client.Do(req)
+    if err != nil {
+        return "", err
+    }
+    defer resp.Body.Close()
+
+    body, _ := io.ReadAll(resp.Body)
+    return string(body), nil
+}
+```
+
+### Database Tool
+
+```go
+type DatabaseTool struct {
+    db *sql.DB
+}
+
+func (t *DatabaseTool) Execute(ctx context.Context, input map[string]interface{}) (string, error) {
+    query := input["query"].(string)
+
+    // Safety: Only allow SELECT
+    if !strings.HasPrefix(strings.ToUpper(strings.TrimSpace(query)), "SELECT") {
+        return "", fmt.Errorf("only SELECT queries are allowed")
+    }
+
+    rows, err := t.db.QueryContext(ctx, query)
+    if err != nil {
+        return "", err
+    }
+    defer rows.Close()
+
+    return formatRows(rows), nil
+}
+```
+
+### File Processing Tool
+
+```go
+type CSVProcessorTool struct{}
+
+func (t *CSVProcessorTool) Execute(ctx context.Context, input map[string]interface{}) (string, error) {
+    path := input["path"].(string)
+    operation := input["operation"].(string)
+
+    file, err := os.Open(path)
+    if err != nil {
+        return "", err
+    }
+    defer file.Close()
+
+    reader := csv.NewReader(file)
+    records, err := reader.ReadAll()
+    if err != nil {
+        return "", err
+    }
+
+    switch operation {
+    case "count":
+        return fmt.Sprintf("%d rows", len(records)), nil
+    case "headers":
+        if len(records) > 0 {
+            return strings.Join(records[0], ", "), nil
+        }
+    case "summary":
+        return summarizeCSV(records), nil
+    }
+
+    return "", fmt.Errorf("unknown operation: %s", operation)
+}
+```
+
+## Testing Tools
+
+```go
+func TestWeatherTool(t *testing.T) {
+    tool := NewWeatherTool("test-key")
+
+    tests := []struct {
+        name    string
+        input   map[string]interface{}
+        wantErr bool
+    }{
+        {
+            name:    "valid location",
+            input:   map[string]interface{}{"location": "London"},
+            wantErr: false,
+        },
+        {
+            name:    "missing location",
+            input:   map[string]interface{}{},
+            wantErr: true,
+        },
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            ctx := context.Background()
+            _, err := tool.Execute(ctx, tt.input)
+            if (err != nil) != tt.wantErr {
+                t.Errorf("Execute() error = %v, wantErr %v", err, tt.wantErr)
+            }
+        })
+    }
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion icon="shield" title="Security first">
+    - Validate and sanitize all inputs
+    - Use parameterized queries for databases
+    - Limit file system access
+    - Don't expose sensitive data in error messages
+  </Accordion>
+  <Accordion icon="book" title="Write clear descriptions">
+    The LLM reads your tool description to decide when to use it. Be specific:
+
+    **Bad**: "Gets data"
+    **Good**: "Fetches user profile data by user ID. Returns name, email, and role."
+  </Accordion>
+  <Accordion icon="clock" title="Handle timeouts">
+    Always respect context cancellation and set appropriate timeouts.
+  </Accordion>
+  <Accordion icon="message" title="Return useful output">
+    Format output for LLM consumption—structured, clear, and actionable.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Skills System"
+    icon="puzzle-piece"
+    href="/concepts/skills"
+  >
+    Package tools as skills
+  </Card>
+  <Card
+    title="Tools Reference"
+    icon="wrench"
+    href="/tools/bash"
+  >
+    Built-in tools documentation
+  </Card>
+</CardGroup>

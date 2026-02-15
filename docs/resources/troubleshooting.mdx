@@ -1,0 +1,267 @@
+---
+title: Troubleshooting
+description: 'Common issues and solutions'
+---
+
+## Installation Issues
+
+<AccordionGroup>
+  <Accordion icon="triangle-exclamation" title="Permission denied during installation">
+    **Problem**: `curl: Permission denied` or similar error.
+
+    **Solution**: Use sudo or install to a user directory:
+    ```bash
+    # Option 1: Use sudo
+    sudo curl -fsSL https://klaw.sh/install.sh | sudo sh
+
+    # Option 2: Install to user directory
+    mkdir -p ~/bin
+    curl -fsSL https://klaw.sh/install.sh | sh -s -- --prefix ~/bin
+    export PATH="$HOME/bin:$PATH"
+    ```
+  </Accordion>
+
+  <Accordion icon="triangle-exclamation" title="Command not found after installation">
+    **Problem**: `klaw: command not found`
+
+    **Solution**: Ensure `/usr/local/bin` is in your PATH:
+    ```bash
+    echo $PATH
+    # If /usr/local/bin is missing:
+    export PATH="/usr/local/bin:$PATH"
+    # Add to ~/.bashrc or ~/.zshrc for permanence
+    ```
+  </Accordion>
+
+  <Accordion icon="triangle-exclamation" title="macOS Gatekeeper warning">
+    **Problem**: "klaw cannot be opened because it is from an unidentified developer"
+
+    **Solution**:
+    ```bash
+    xattr -d com.apple.quarantine /usr/local/bin/klaw
+    ```
+    Or go to System Preferences → Security & Privacy → Allow.
+  </Accordion>
+</AccordionGroup>
+
+## Provider Issues
+
+<AccordionGroup>
+  <Accordion icon="key" title="API key not working">
+    **Problem**: `ANTHROPIC_API_KEY not set` or authentication errors.
+
+    **Solutions**:
+    1. Check the key is set correctly:
+       ```bash
+       echo $ANTHROPIC_API_KEY
+       ```
+    2. Ensure no extra whitespace:
+       ```bash
+       export ANTHROPIC_API_KEY="sk-ant-..."  # No spaces
+       ```
+    3. Verify the key is valid at the provider's dashboard.
+  </Accordion>
+
+  <Accordion icon="globe" title="Network connection errors">
+    **Problem**: `connection refused` or timeout errors.
+
+    **Solutions**:
+    1. Check internet connectivity
+    2. Verify no firewall blocking outbound HTTPS
+    3. Check provider status page
+    4. Try a different provider:
+       ```bash
+       klaw chat --provider openrouter
+       ```
+  </Accordion>
+
+  <Accordion icon="credit-card" title="Rate limit or quota exceeded">
+    **Problem**: `429 Too Many Requests` or quota errors.
+
+    **Solutions**:
+    1. Wait and retry
+    2. Check your usage at the provider dashboard
+    3. Upgrade your plan
+    4. Use a different model with lower cost
+  </Accordion>
+</AccordionGroup>
+
+## Slack Integration Issues
+
+<AccordionGroup>
+  <Accordion icon="slack" title="Bot doesn't respond in Slack">
+    **Problem**: Messages to the bot get no response.
+
+    **Checklist**:
+    1. Is the bot invited to the channel? (`/invite @klaw`)
+    2. Is Socket Mode enabled in Slack app settings?
+    3. Are both tokens set?
+       ```bash
+       echo $SLACK_BOT_TOKEN
+       echo $SLACK_APP_TOKEN
+       ```
+    4. Check `klaw start` output for errors
+    5. Verify the bot has required OAuth scopes
+  </Accordion>
+
+  <Accordion icon="clock" title="Slow responses in Slack">
+    **Problem**: Bot takes too long to respond.
+
+    **Solutions**:
+    1. Check API provider latency
+    2. Use a faster model (claude-haiku-3)
+    3. Reduce agent skills/tools
+    4. Check system resources on the klaw host
+  </Accordion>
+
+  <Accordion icon="message-slash" title="Bot missing messages">
+    **Problem**: Bot doesn't see all messages.
+
+    **Solutions**:
+    1. Ensure `channels:history` OAuth scope is granted
+    2. For private channels, add `groups:history`
+    3. Check Event Subscriptions are enabled
+    4. Verify `message.channels` event is subscribed
+  </Accordion>
+</AccordionGroup>
+
+## Distributed Mode Issues
+
+<AccordionGroup>
+  <Accordion icon="unlink" title="Node can't connect to controller">
+    **Problem**: `connection refused` when joining controller.
+
+    **Solutions**:
+    1. Verify controller is running:
+       ```bash
+       klaw controller status
+       ```
+    2. Check network connectivity:
+       ```bash
+       nc -zv controller-host 9090
+       ```
+    3. Verify token matches
+    4. Check firewall rules (port 9090)
+    5. Ensure controller is listening on correct interface:
+       ```bash
+       klaw controller start --host 0.0.0.0
+       ```
+  </Accordion>
+
+  <Accordion icon="clock" title="Tasks not dispatching">
+    **Problem**: `klaw dispatch` hangs or fails.
+
+    **Solutions**:
+    1. Check if nodes are connected:
+       ```bash
+       klaw get nodes
+       ```
+    2. Verify agent exists on a node:
+       ```bash
+       klaw get agents
+       ```
+    3. Check controller logs for errors
+  </Accordion>
+
+  <Accordion icon="heart-crack" title="Nodes disconnecting frequently">
+    **Problem**: Nodes show as disconnected intermittently.
+
+    **Solutions**:
+    1. Check network stability
+    2. Increase heartbeat timeout
+    3. Check node resource usage (CPU, memory)
+    4. Review controller logs for disconnect reasons
+  </Accordion>
+</AccordionGroup>
+
+## Container Issues
+
+<AccordionGroup>
+  <Accordion icon="docker" title="Container build fails">
+    **Problem**: `klaw build` fails.
+
+    **Solutions**:
+    1. Ensure Podman is installed:
+       ```bash
+       podman --version
+       ```
+    2. Run from klaw source directory
+    3. Check Containerfile exists
+    4. Verify disk space
+  </Accordion>
+
+  <Accordion icon="box" title="Container won't start">
+    **Problem**: `klaw run` fails immediately.
+
+    **Solutions**:
+    1. Build the image first:
+       ```bash
+       klaw build
+       ```
+    2. Check if image exists:
+       ```bash
+       podman images | grep klaw
+       ```
+    3. Check container logs:
+       ```bash
+       klaw logs <container-name>
+       ```
+  </Accordion>
+</AccordionGroup>
+
+## General Issues
+
+<AccordionGroup>
+  <Accordion icon="gear" title="Configuration not loading">
+    **Problem**: Settings in config.toml are ignored.
+
+    **Solutions**:
+    1. Check config file location:
+       ```bash
+       cat ~/.klaw/config.toml
+       ```
+    2. Validate TOML syntax (no errors)
+    3. Environment variables override config
+    4. Run `klaw config view` to see effective config
+  </Accordion>
+
+  <Accordion icon="memory" title="High memory usage">
+    **Problem**: klaw using excessive memory.
+
+    **Solutions**:
+    1. Reduce conversation history length
+    2. Clear old sessions:
+       ```bash
+       rm -rf ~/.klaw/sessions/*
+       ```
+    3. Use a smaller model
+    4. Restart klaw to clear memory
+  </Accordion>
+
+  <Accordion icon="bug" title="Unexpected errors">
+    **Problem**: Cryptic error messages.
+
+    **Solutions**:
+    1. Enable debug logging:
+       ```bash
+       klaw chat --log-level debug
+       ```
+    2. Check logs:
+       ```bash
+       cat ~/.klaw/logs/klaw.log
+       ```
+    3. Report issue on GitHub with logs
+  </Accordion>
+</AccordionGroup>
+
+## Getting Help
+
+If you can't resolve your issue:
+
+1. Check [GitHub Issues](https://github.com/klawsh/klaw.sh/issues) for similar problems
+2. Join the [Discord community](https://discord.gg/eachlabs)
+3. File a new issue with:
+   - klaw version (`klaw version`)
+   - OS and architecture
+   - Steps to reproduce
+   - Relevant logs

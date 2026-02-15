@@ -1,0 +1,63 @@
+---
+title: Namespaces & Clusters
+description: 'Multi-tenant organization with Kubernetes-style isolation'
+---
+
+## Overview
+
+klaw uses a hierarchical organization model inspired by Kubernetes:
+
+- **Cluster**: Top-level isolation (organization/environment)
+- **Namespace**: Logical isolation within cluster (team/project)
+
+## Creating Clusters
+
+```bash
+klaw create cluster production
+klaw create cluster staging
+```
+
+## Creating Namespaces
+
+```bash
+klaw create namespace engineering --cluster production
+klaw create namespace marketing --cluster production
+```
+
+## Context Management
+
+```bash
+# Set context
+klaw context use production/engineering
+
+# List contexts
+klaw context list
+```
+
+## Resource Isolation
+
+| Resource | Scope |
+|----------|-------|
+| Agents | Namespace |
+| Cron Jobs | Namespace |
+| Conversation History | Namespace |
+| Skills | Cluster-wide |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Distributed Mode"
+    icon="server"
+    href="/architecture/distributed-mode"
+  >
+    Scale across machines
+  </Card>
+  <Card
+    title="Multi-Agent Workflows"
+    icon="sitemap"
+    href="/guides/multi-agent-workflows"
+  >
+    Orchestrate teams of agents
+  </Card>
+</CardGroup>

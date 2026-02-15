@@ -1,0 +1,110 @@
+{
+  "$schema": "https://mintlify.com/schema.json",
+  "name": "klaw",
+  "logo": {
+    "dark": "/logo/klaw-dark.svg",
+    "light": "/logo/klaw-light.svg"
+  },
+  "favicon": "/favicon.svg",
+  "colors": {
+    "primary": "#22C55E",
+    "light": "#4ADE80",
+    "dark": "#16A34A",
+    "anchors": {
+      "from": "#22C55E",
+      "to": "#10B981"
+    }
+  },
+  "topbarLinks": [
+    {
+      "name": "Support",
+      "url": "mailto:support@eachlabs.ai"
+    }
+  ],
+  "topbarCtaButton": {
+    "name": "GitHub",
+    "url": "https://github.com/klawsh/klaw.sh"
+  },
+  "anchors": [
+    {
+      "name": "GitHub",
+      "icon": "github",
+      "url": "https://github.com/klawsh/klaw.sh"
+    },
+    {
+      "name": "Community",
+      "icon": "discord",
+      "url": "https://discord.gg/eachlabs"
+    }
+  ],
+  "navigation": [
+    {
+      "group": "Getting Started",
+      "pages": [
+        "introduction",
+        "quickstart",
+        "installation"
+      ]
+    },
+    {
+      "group": "Core Concepts",
+      "pages": [
+        "concepts/agents",
+        "concepts/channels",
+        "concepts/tools",
+        "concepts/skills",
+        "concepts/orchestrator",
+        "concepts/memory"
+      ]
+    },
+    {
+      "group": "Guides",
+      "pages": [
+        "guides/first-agent",
+        "guides/slack-integration",
+        "guides/custom-tools",
+        "guides/multi-agent-workflows",
+        "guides/distributed-deployment"
+      ]
+    },
+    {
+      "group": "Configuration",
+      "pages": [
+        "configuration/overview"
+      ]
+    },
+    {
+      "group": "Architecture",
+      "pages": [
+        "architecture/overview",
+        "architecture/agent-loop",
+        "architecture/distributed-mode",
+        "architecture/namespaces-clusters"
+      ]
+    },
+    {
+      "group": "CLI Reference",
+      "pages": [
+        "cli-reference/overview",
+        "cli-reference/chat"
+      ]
+    },
+    {
+      "group": "Resources",
+      "pages": [
+        "resources/troubleshooting",
+        "resources/faq"
+      ]
+    }
+  ],
+  "footerSocials": {
+    "twitter": "https://twitter.com/eaborai",
+    "github": "https://github.com/klawsh/klaw.sh",
+    "discord": "https://discord.gg/eachlabs"
+  },
+  "feedback": {
+    "thumbsRating": true,
+    "suggestEdit": true,
+    "raiseIssue": true
+  }
+}

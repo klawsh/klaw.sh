@@ -1,0 +1,300 @@
+---
+title: Agents
+description: 'Understanding the core building block of klaw'
+---
+
+## What is an Agent?
+
+An **agent** is the fundamental unit of deployment in klaw. It's an autonomous AI entity that can:
+
+- Understand natural language instructions
+- Make decisions about how to accomplish tasks
+- Use tools to interact with systems and data
+- Maintain conversation context
+- Learn from interactions through memory
+
+Think of agents like pods in Kubernetes—they're the smallest deployable units that encapsulate the logic and capabilities needed to perform work.
+
+## Agent Architecture
+
+```
+┌─────────────────────────────────────────────────────┐
+│                     AGENT                           │
+│  ┌───────────────────────────────────────────────┐  │
+│  │               LLM Provider                    │  │
+│  │  (Claude, GPT-4, Gemini, etc.)               │  │
+│  └───────────────────┬───────────────────────────┘  │
+│                      │                              │
+│  ┌───────────────────▼───────────────────────────┐  │
+│  │            Conversation History               │  │
+│  │  (Thread-aware, per-channel)                 │  │
+│  └───────────────────┬───────────────────────────┘  │
+│                      │                              │
+│  ┌───────────────────▼───────────────────────────┐  │
+│  │              Tools Registry                   │  │
+│  │  [bash] [read] [write] [web] [...]           │  │
+│  └───────────────────┬───────────────────────────┘  │
+│                      │                              │
+│  ┌───────────────────▼───────────────────────────┐  │
+│  │              System Prompt                    │  │
+│  │  (Identity + Skills + Memory)                │  │
+│  └───────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────┘
+```
+
+## Creating Agents
+
+### Using the CLI
+
+```bash
+# Create a basic agent
+klaw create agent coder --model claude-sonnet-4-20250514
+
+# Create with specific skills
+klaw create agent researcher \
+  --model claude-sonnet-4-20250514 \
+  --skills web-search,browser
+
+# Create with custom workdir
+klaw create agent devops \
+  --model gpt-4o \
+  --skills docker,git \
+  --workdir /home/user/infrastructure
+```
+
+### Agent Definition File
+
+Agents are stored as TOML files in `~/.klaw/agents/`:
+
+```toml
+# ~/.klaw/agents/researcher.toml
+name = "researcher"
+model = "claude-sonnet-4-20250514"
+task = "Research and analyze information from the web"
+tools = ["web-search", "browser", "read", "write"]
+workdir = "/home/user/research"
+runtime = "process"
+created_at = 2024-12-14T10:00:00Z
+
+[config]
+temperature = 0.7
+max_tokens = 4096
+```
+
+## Agent Lifecycle
+
+<Steps>
+  <Step title="Creation">
+    Agent definition is created and stored. No resources consumed yet.
+  </Step>
+  <Step title="Activation">
+    When a message arrives for the agent, it's activated with its LLM provider, tools, and system prompt.
+  </Step>
+  <Step title="Processing">
+    Agent enters the tool-use loop: receive input → LLM decision → tool execution → repeat.
+  </Step>
+  <Step title="Idle">
+    After completing a task, agent maintains conversation history but releases LLM connection.
+  </Step>
+  <Step title="Termination">
+    Agent is deleted or cluster shuts down. History can be preserved or discarded.
+  </Step>
+</Steps>
+
+## Agent Properties
+
+| Property | Description | Required |
+|----------|-------------|----------|
+| `name` | Unique identifier for the agent | Yes |
+| `model` | LLM model to use | Yes |
+| `task` | Description of the agent's purpose | No |
+| `tools` | List of tools/skills the agent can use | No |
+| `workdir` | Working directory for file operations | No |
+| `runtime` | Execution environment (`process` or `docker`) | No |
+
+## Managing Agents
+
+### List Agents
+
+```bash
+klaw get agents
+```
+
+Output:
+```
+NAME        MODEL                       SKILLS              STATUS
+coder       claude-sonnet-4-20250514   git,code-exec       Ready
+researcher  claude-sonnet-4-20250514   web-search,browser  Ready
+devops      gpt-4o                      docker,bash         Ready
+```
+
+### Describe an Agent
+
+```bash
+klaw describe agent coder
+```
+
+Output:
+```yaml
+Name:       coder
+Model:      claude-sonnet-4-20250514
+Task:       Write and debug code
+Skills:     git, code-exec
+Workdir:    /home/user/projects
+Runtime:    process
+Created:    2024-12-14T10:00:00Z
+Status:     Ready
+Sessions:   12
+Last Used:  2024-12-14T15:30:00Z
+```
+
+### Delete an Agent
+
+```bash
+klaw delete agent researcher
+```
+
+## Agent Communication
+
+Agents receive work through **channels**:
+
+<CardGroup cols={2}>
+  <Card title="CLI" icon="terminal">
+    Direct interaction via `klaw chat`
+  </Card>
+  <Card title="Slack" icon="slack">
+    Messages in Slack channels/threads
+  </Card>
+  <Card title="API" icon="code">
+    REST API calls for programmatic access
+  </Card>
+  <Card title="Tasks" icon="list-check">
+    Dispatched tasks from controller
+  </Card>
+</CardGroup>
+
+## Multi-Agent Patterns
+
+### Specialized Agents
+
+Create agents for specific domains:
+
+```bash
+# Frontend specialist
+klaw create agent frontend \
+  --model claude-sonnet-4 \
+  --skills code-exec \
+  --task "React/TypeScript frontend development"
+
+# Backend specialist
+klaw create agent backend \
+  --model claude-sonnet-4 \
+  --skills code-exec,database \
+  --task "Go/Python backend development"
+
+# DevOps specialist
+klaw create agent devops \
+  --model gpt-4o \
+  --skills docker,git \
+  --task "Infrastructure and deployment"
+```
+
+### Agent Spawning
+
+Agents can spawn sub-agents for complex tasks:
+
+```
+User: "Build a full-stack application with tests"
+      │
+      ▼
+┌─────────────────┐
+│  Main Agent     │
+│  (Coordinator)  │
+└────────┬────────┘
+         │ spawns
+    ┌────┴────┐
+    │         │
+    ▼         ▼
+┌───────┐ ┌───────┐
+│Frontend│ │Backend│
+│ Agent  │ │ Agent │
+└───────┘ └───────┘
+```
+
+Use the `agent_spawn` tool:
+
+```json
+{
+  "tool": "agent_spawn",
+  "input": {
+    "name": "frontend-worker",
+    "task": "Create React components for the user dashboard"
+  }
+}
+```
+
+## Agent Runtime Modes
+
+<Tabs>
+  <Tab title="Process (Default)">
+    Agent runs as a local process with direct system access:
+    ```toml
+    runtime = "process"
+    ```
+    - Full filesystem access
+    - Direct command execution
+    - Fastest performance
+  </Tab>
+  <Tab title="Docker">
+    Agent runs in an isolated container:
+    ```toml
+    runtime = "docker"
+
+    [docker]
+    image = "klaw-agent:latest"
+    volumes = ["/data:/workspace"]
+    ```
+    - Sandboxed environment
+    - Reproducible execution
+    - Resource limits
+  </Tab>
+</Tabs>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion icon="bullseye" title="Define clear purposes">
+    Give each agent a specific, well-defined task. Specialized agents perform better than generalists.
+
+    **Good**: "API development and testing"
+    **Bad**: "Do everything"
+  </Accordion>
+  <Accordion icon="shield" title="Minimize tool permissions">
+    Only give agents the tools they actually need. Avoid granting bash access unless necessary.
+  </Accordion>
+  <Accordion icon="folder" title="Set appropriate workdirs">
+    Constrain agents to specific directories to prevent unintended file modifications.
+  </Accordion>
+  <Accordion icon="brain" title="Use appropriate models">
+    Match model capabilities to task complexity. Use Sonnet for most tasks, Opus for complex reasoning.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Tools"
+    icon="wrench"
+    href="/concepts/tools"
+  >
+    Learn about the tools agents can use
+  </Card>
+  <Card
+    title="Skills"
+    icon="puzzle-piece"
+    href="/concepts/skills"
+  >
+    Compose capabilities with skills
+  </Card>
+</CardGroup>

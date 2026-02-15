@@ -1,0 +1,377 @@
+---
+title: Memory
+description: 'Persistent context and workspace management'
+---
+
+## What is Memory?
+
+**Memory** is klaw's system for maintaining persistent context across conversations. It allows agents to remember important information, maintain identity, and build knowledge over time.
+
+Memory operates at multiple levels:
+- **Workspace files**: Structured context loaded into every conversation
+- **Conversation history**: Per-thread message history
+- **Session logs**: Daily interaction logs for long-term reference
+
+## Workspace Structure
+
+The workspace is the agent's persistent knowledge base:
+
+```
+~/.klaw/workspace/
+├── SOUL.md      # Agent identity and values
+├── AGENTS.md    # Registry of available agents
+├── TOOLS.md     # Documentation for available tools
+├── USER.md      # User preferences and context (optional)
+├── MEMORY.md    # Learned patterns and notes (optional)
+└── logs/        # Daily interaction logs
+    ├── 2024-12-14.md
+    ├── 2024-12-13.md
+    └── ...
+```
+
+## Core Files
+
+### SOUL.md
+
+Defines the agent's identity, values, and operating principles:
+
+```markdown
+# Soul
+
+You are klaw, an AI agent built for developers.
+
+## Values
+
+1. **AI Should Be Accessible** - Not just for big companies
+2. **Infrastructure Should Be Invisible** - Transparent to users
+3. **Open Beats Closed** - Open standards, no vendor lock-in
+4. **Simplicity Is Hard** - Obsess over UX
+5. **Tools Enable** - Should feel like a superpower
+
+## Operating Principles
+
+- Be direct and concise
+- Show don't tell—write code, not explanations
+- Ask clarifying questions when requirements are ambiguous
+- Prefer simple solutions over complex ones
+```
+
+### AGENTS.md
+
+Documents available agents and their capabilities:
+
+```markdown
+# Available Agents
+
+## coder
+- **Model**: claude-sonnet-4-20250514
+- **Skills**: code-exec, git
+- **Purpose**: Write and debug code
+
+## researcher
+- **Model**: claude-sonnet-4-20250514
+- **Skills**: web-search, browser
+- **Purpose**: Research and analyze information
+
+## devops
+- **Model**: gpt-4o
+- **Skills**: docker, git
+- **Purpose**: Infrastructure and deployments
+```
+
+### TOOLS.md
+
+Reference documentation for available tools:
+
+```markdown
+# Available Tools
+
+## bash
+Execute shell commands.
+- `command`: The command to run
+- `timeout`: Timeout in milliseconds (default: 120000)
+
+## read
+Read file contents.
+- `path`: File path to read
+- `offset`: Starting line (optional)
+- `limit`: Max lines to read (optional)
+
+## write
+Write content to a file.
+- `path`: File path to write
+- `content`: Content to write
+```
+
+### USER.md (Optional)
+
+User-specific context and preferences:
+
+```markdown
+# User Context
+
+## Preferences
+- Preferred language: Go
+- Code style: Short functions, clear variable names
+- Communication style: Direct, no fluff
+
+## Current Projects
+- klaw: AI agent orchestration platform
+- api-gateway: REST API gateway service
+
+## Notes
+- Timezone: UTC-8
+- Availability: Weekdays 9am-5pm
+```
+
+### MEMORY.md (Optional)
+
+Accumulated knowledge and patterns:
+
+```markdown
+# Memory
+
+## Patterns Learned
+
+### Project Structure
+- Go projects use cmd/ for entry points
+- Internal packages in internal/
+- Tests alongside source files
+
+### Common Fixes
+- "connection refused" usually means service not running
+- Import cycles fixed by extracting interfaces
+
+## Important Notes
+- Database migrations must be backward compatible
+- Always run tests before committing
+```
+
+## Memory Loading
+
+Workspace files are loaded into the system prompt:
+
+```
+┌─────────────────────────────────────────────────────┐
+│              SYSTEM PROMPT                          │
+├─────────────────────────────────────────────────────┤
+│ Base Instructions                                   │
+│ ───────────────────────────────────────────────────│
+│ You are a helpful AI assistant...                   │
+├─────────────────────────────────────────────────────┤
+│ SOUL.md                                             │
+│ ───────────────────────────────────────────────────│
+│ [Soul content loaded here]                          │
+├─────────────────────────────────────────────────────┤
+│ AGENTS.md                                           │
+│ ───────────────────────────────────────────────────│
+│ [Agents content loaded here]                        │
+├─────────────────────────────────────────────────────┤
+│ TOOLS.md                                            │
+│ ───────────────────────────────────────────────────│
+│ [Tools content loaded here]                         │
+├─────────────────────────────────────────────────────┤
+│ Skill Prompts                                       │
+│ ───────────────────────────────────────────────────│
+│ [Combined skill system prompts]                     │
+└─────────────────────────────────────────────────────┘
+```
+
+## Conversation History
+
+Each conversation maintains its own history:
+
+```go
+type ConversationHistory struct {
+    ID        string     // Unique conversation identifier
+    Messages  []Message  // Ordered list of messages
+    CreatedAt time.Time
+    UpdatedAt time.Time
+}
+```
+
+### Thread-Aware History
+
+For channels like Slack, history is maintained per-thread:
+
+```
+Main Channel
+├── Thread 1 (ts: 123.456) → Conversation A
+│   ├── User: fix the bug
+│   ├── Agent: I'll look into it
+│   └── User: thanks
+├── Thread 2 (ts: 789.012) → Conversation B
+│   ├── User: deploy to prod
+│   └── Agent: Starting deployment
+└── Main messages → Conversation C
+```
+
+## Session Logs
+
+Daily logs capture all interactions:
+
+```markdown
+# Session Log: 2024-12-14
+
+## 10:00:00 - Conversation with coder
+
+**User**: Fix the authentication bug in login.go
+
+**Agent**: I'll look at that file...
+
+[Tool: read] /src/login.go
+[Tool: edit] Fixed null check
+
+**Result**: Bug fixed in commit a1b2c3d
+
+---
+
+## 14:30:00 - Conversation with researcher
+
+**User**: Research Go error handling best practices
+
+**Agent**: I'll search for that...
+
+[Tool: web_search] "go error handling best practices"
+
+**Result**: Compiled summary with 5 key practices
+```
+
+## Memory Configuration
+
+```toml
+# ~/.klaw/config.toml
+
+[workspace]
+path = "~/.klaw/workspace"
+
+[memory]
+enabled = true
+max_history = 100        # Max messages per conversation
+log_interactions = true  # Write to daily logs
+auto_memory = true       # Auto-update MEMORY.md
+```
+
+## Managing Memory
+
+### View Workspace
+
+```bash
+klaw workspace show
+```
+
+### Edit Workspace Files
+
+```bash
+klaw workspace edit SOUL.md
+```
+
+### Clear History
+
+```bash
+# Clear specific conversation
+klaw history clear --conversation abc123
+
+# Clear all history
+klaw history clear --all
+```
+
+### Export Logs
+
+```bash
+klaw logs export --format json --output logs.json
+```
+
+## Memory Best Practices
+
+<AccordionGroup>
+  <Accordion icon="file-lines" title="Keep SOUL.md focused">
+    SOUL.md should contain identity and principles, not implementation details.
+  </Accordion>
+  <Accordion icon="refresh" title="Update MEMORY.md regularly">
+    As patterns emerge, document them for future reference.
+  </Accordion>
+  <Accordion icon="user" title="Personalize USER.md">
+    Add your preferences and context for more tailored responses.
+  </Accordion>
+  <Accordion icon="trash" title="Prune old history">
+    Clear old conversations to prevent context bloat.
+  </Accordion>
+</AccordionGroup>
+
+## Auto-Memory
+
+With `auto_memory` enabled, agents can update MEMORY.md:
+
+```
+User: Remember that our API always uses snake_case
+
+Agent: I'll remember that. Adding to my memory...
+
+[Tool: edit] ~/.klaw/workspace/MEMORY.md
+Added: "API conventions: Always use snake_case"
+```
+
+### What Gets Auto-Saved
+
+- Explicit "remember this" requests
+- Patterns learned across multiple interactions
+- Important project-specific conventions
+- Common error solutions
+
+### What Doesn't Get Auto-Saved
+
+- Temporary information
+- Session-specific context
+- Information already in CLAUDE.md
+- Unverified or speculative conclusions
+
+## Memory Across Agents
+
+Workspace is shared across all agents by default:
+
+```
+┌─────────────────────────────────────────────────────┐
+│                SHARED WORKSPACE                      │
+│  ┌─────────┐ ┌─────────┐ ┌─────────┐               │
+│  │ SOUL.md │ │ USER.md │ │MEMORY.md│               │
+│  └────┬────┘ └────┬────┘ └────┬────┘               │
+│       │           │           │                     │
+│       └───────────┼───────────┘                     │
+│                   │                                 │
+│       ┌───────────┼───────────┐                     │
+│       ▼           ▼           ▼                     │
+│    ┌─────┐    ┌─────┐    ┌─────┐                   │
+│    │coder│    │ research │    │devops│                   │
+│    └─────┘    └─────┘    └─────┘                   │
+└─────────────────────────────────────────────────────┘
+```
+
+For isolated memory per agent:
+
+```toml
+[agent.coder]
+workspace = "~/.klaw/workspaces/coder"
+
+[agent.researcher]
+workspace = "~/.klaw/workspaces/researcher"
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Architecture"
+    icon="sitemap"
+    href="/architecture/overview"
+  >
+    Understand the full system architecture
+  </Card>
+  <Card
+    title="First Agent"
+    icon="wand-magic-sparkles"
+    href="/guides/first-agent"
+  >
+    Build your first custom agent
+  </Card>
+</CardGroup>

@@ -1,0 +1,411 @@
+---
+title: Distributed Deployment
+description: 'Scale klaw across multiple machines with controller-node architecture'
+---
+
+## Overview
+
+klaw supports distributed deployment where a central **controller** manages multiple **worker nodes**. This architecture enables:
+
+- **Horizontal scaling** - Add more nodes as workload increases
+- **Fault tolerance** - Nodes can fail without losing the system
+- **Resource isolation** - Different agents on different machines
+- **Geographic distribution** - Deploy nodes closer to users
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                     CONTROLLER                          │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │  Agent Registry    │  Task Dispatcher           │   │
+│  │  State Manager     │  Node Manager              │   │
+│  └─────────────────────────────────────────────────┘   │
+│                         │                              │
+│              TCP/JSON   │   Heartbeat (30s)            │
+│                         ▼                              │
+└─────────────────────────┬──────────────────────────────┘
+                          │
+          ┌───────────────┼───────────────┐
+          │               │               │
+          ▼               ▼               ▼
+   ┌─────────────┐ ┌─────────────┐ ┌─────────────┐
+   │   NODE 1    │ │   NODE 2    │ │   NODE 3    │
+   │ ┌─────────┐ │ │ ┌─────────┐ │ │ ┌─────────┐ │
+   │ │ Agent A │ │ │ │ Agent B │ │ │ │ Agent C │ │
+   │ │ Agent D │ │ │ │ Agent E │ │ │ │ Agent F │ │
+   │ └─────────┘ │ │ └─────────┘ │ │ └─────────┘ │
+   └─────────────┘ └─────────────┘ └─────────────┘
+```
+
+## Setting Up the Controller
+
+### Start the Controller
+
+On your central server:
+
+```bash
+klaw controller start --port 9090
+```
+
+With authentication token:
+
+```bash
+klaw controller start --port 9090 --token my-secret-token
+```
+
+Full options:
+
+```bash
+klaw controller start \
+  --port 9090 \
+  --host 0.0.0.0 \
+  --token my-secret-token \
+  --data-dir /var/lib/klaw
+```
+
+### Controller Output
+
+```
+╭─────────────────────────────────────────╮
+│         klaw Controller                 │
+╰─────────────────────────────────────────╯
+Address:   0.0.0.0:9090
+Data Dir:  /var/lib/klaw
+Auth:      enabled
+
+Waiting for nodes to connect...
+```
+
+### Check Controller Status
+
+```bash
+klaw controller status
+```
+
+## Setting Up Worker Nodes
+
+### Join a Controller
+
+On each worker machine:
+
+```bash
+klaw node join controller-host:9090 --token my-secret-token
+```
+
+With a name:
+
+```bash
+klaw node join controller-host:9090 \
+  --token my-secret-token \
+  --name worker-1
+```
+
+### Node Registration
+
+When a node joins, it:
+1. Authenticates with the controller
+2. Registers its available agents
+3. Starts heartbeat (every 30 seconds)
+4. Waits for task dispatch
+
+### Check Node Status
+
+```bash
+klaw node status
+```
+
+## Managing the Cluster
+
+### List Nodes
+
+```bash
+klaw get nodes
+```
+
+Output:
+```
+NAME       STATUS   AGENTS   TASKS   LAST HEARTBEAT
+worker-1   Ready    3        2       5s ago
+worker-2   Ready    2        1       12s ago
+worker-3   Ready    4        0       3s ago
+```
+
+### Describe a Node
+
+```bash
+klaw describe node worker-1
+```
+
+Output:
+```yaml
+Name:       worker-1
+Status:     Ready
+Address:    192.168.1.10:9091
+Connected:  2024-12-14T10:00:00Z
+
+Agents:
+  - coder (claude-sonnet-4-20250514)
+  - researcher (claude-sonnet-4-20250514)
+  - devops (gpt-4o)
+
+Active Tasks: 2
+Completed Tasks: 45
+```
+
+## Dispatching Tasks
+
+### Send a Task to the Cluster
+
+```bash
+klaw dispatch "Fix the authentication bug" --agent coder
+```
+
+The controller:
+1. Finds a node with the `coder` agent
+2. Dispatches the task to that node
+3. Streams results back
+
+### View Tasks
+
+```bash
+klaw get tasks
+```
+
+Output:
+```
+ID          AGENT    NODE      STATUS     CREATED
+task-001    coder    worker-1  Running    2m ago
+task-002    devops   worker-2  Completed  15m ago
+task-003    coder    worker-1  Pending    1m ago
+```
+
+### Task Output
+
+```bash
+klaw describe task task-001
+```
+
+## Creating Agents on Nodes
+
+### Define Agents Locally
+
+On each node, create agents:
+
+```bash
+# On worker-1
+klaw create agent coder --model claude-sonnet-4-20250514 --skills code-exec,git
+klaw create agent tester --model claude-sonnet-4-20250514 --skills code-exec
+
+# On worker-2
+klaw create agent researcher --model claude-sonnet-4-20250514 --skills web-search
+klaw create agent analyst --model gpt-4o --skills database
+```
+
+### Register Agents with Controller
+
+When a node joins, it automatically registers its agents:
+
+```bash
+klaw node join controller:9090 --token xxx
+```
+
+Or manually register:
+
+```bash
+klaw node register-agent coder
+klaw node register-agent researcher
+```
+
+## Namespaces in Distributed Mode
+
+### Create Cluster and Namespaces
+
+```bash
+# Create cluster
+klaw create cluster production
+
+# Create namespaces
+klaw create namespace engineering --cluster production
+klaw create namespace analytics --cluster production
+```
+
+### Bind Agents to Namespaces
+
+```bash
+klaw create agent-binding coder-binding \
+  --cluster production \
+  --namespace engineering \
+  --agent coder \
+  --skills code-exec,git
+```
+
+### Dispatch to Namespace
+
+```bash
+klaw dispatch "Review the PR" \
+  --namespace engineering \
+  --agent coder
+```
+
+## High Availability
+
+### Multiple Controllers (Future)
+
+For production deployments, run multiple controllers with shared state:
+
+```bash
+# Controller 1
+klaw controller start --port 9090 --etcd-endpoints etcd1:2379,etcd2:2379
+
+# Controller 2
+klaw controller start --port 9090 --etcd-endpoints etcd1:2379,etcd2:2379
+```
+
+### Node Auto-Recovery
+
+Nodes automatically reconnect if the controller restarts:
+
+```
+[INFO] Connection lost to controller
+[INFO] Reconnecting in 5s...
+[INFO] Reconnected to controller
+```
+
+## Container Deployment
+
+### Run Nodes in Containers
+
+```bash
+# Build image
+klaw build
+
+# Run node in container
+docker run -d \
+  -e ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY \
+  -e CONTROLLER_ADDR=controller:9090 \
+  -e AUTH_TOKEN=my-secret-token \
+  klaw node join
+```
+
+### Kubernetes Deployment
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: klaw-node
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: klaw-node
+  template:
+    spec:
+      containers:
+        - name: klaw
+          image: ghcr.io/eachlabs/klaw:latest
+          command: ["klaw", "node", "join", "klaw-controller:9090"]
+          env:
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: klaw-secrets
+                  key: anthropic-api-key
+```
+
+## Monitoring
+
+### Cluster Metrics
+
+```bash
+klaw cluster status
+```
+
+Output:
+```
+Cluster: production
+
+Nodes:     3 ready, 0 not ready
+Agents:    9 registered
+Tasks:     12 running, 145 completed, 0 failed
+
+Task Distribution:
+  worker-1: 4 tasks
+  worker-2: 5 tasks
+  worker-3: 3 tasks
+```
+
+### View Logs
+
+```bash
+# Controller logs
+klaw controller logs
+
+# Node logs
+klaw node logs
+
+# Specific node
+klaw logs --node worker-1
+```
+
+## Security Considerations
+
+<AccordionGroup>
+  <Accordion icon="key" title="Use authentication tokens">
+    Always set `--token` for production deployments:
+    ```bash
+    klaw controller start --token $(openssl rand -hex 32)
+    ```
+  </Accordion>
+  <Accordion icon="shield" title="Network security">
+    - Use TLS for controller-node communication
+    - Restrict network access with firewalls
+    - Use private networks when possible
+  </Accordion>
+  <Accordion icon="lock" title="API key management">
+    - Store API keys in environment variables
+    - Use secrets management (Vault, K8s secrets)
+    - Rotate keys regularly
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion icon="unlink" title="Node can't connect">
+    1. Verify controller is running: `klaw controller status`
+    2. Check network connectivity: `nc -zv controller-host 9090`
+    3. Verify token matches
+    4. Check firewall rules
+  </Accordion>
+  <Accordion icon="clock" title="Tasks not dispatching">
+    1. Check if node has the required agent
+    2. Verify node is in Ready state
+    3. Check controller logs for errors
+  </Accordion>
+  <Accordion icon="heart-crack" title="Node disconnects frequently">
+    1. Check network stability
+    2. Increase heartbeat timeout
+    3. Check node resource usage
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Namespaces & Clusters"
+    icon="folder-tree"
+    href="/architecture/namespaces-clusters"
+  >
+    Learn about multi-tenancy
+  </Card>
+  <Card
+    title="CLI Reference"
+    icon="terminal"
+    href="/cli-reference/controller"
+  >
+    Complete controller commands
+  </Card>
+</CardGroup>

@@ -1,0 +1,301 @@
+---
+title: Architecture Overview
+description: 'Understanding klaw system architecture'
+---
+
+## System Overview
+
+klaw is built as a modular, distributed system inspired by Kubernetes. Each component has a clear responsibility and communicates through well-defined interfaces.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        USER INTERFACES                       │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐    │
+│  │   CLI    │  │   TUI    │  │  Slack   │  │   API    │    │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘    │
+└───────┼─────────────┼─────────────┼─────────────┼───────────┘
+        │             │             │             │
+        └─────────────┴──────┬──────┴─────────────┘
+                             │
+                    ┌────────▼────────┐
+                    │    CHANNELS     │
+                    │  (Abstraction)  │
+                    └────────┬────────┘
+                             │
+                    ┌────────▼────────┐
+                    │  ORCHESTRATOR   │
+                    │  (Routing)      │
+                    └────────┬────────┘
+                             │
+                    ┌────────▼────────┐
+                    │     AGENT       │
+                    │ (LLM + Tools)   │
+                    └────────┬────────┘
+                             │
+              ┌──────────────┼──────────────┐
+              │              │              │
+       ┌──────▼──────┐ ┌─────▼─────┐ ┌──────▼──────┐
+       │  PROVIDER   │ │   TOOLS   │ │   MEMORY    │
+       │  (LLM API)  │ │ (Actions) │ │ (Context)   │
+       └─────────────┘ └───────────┘ └─────────────┘
+```
+
+## Core Components
+
+### Channels
+
+Channels are the communication interfaces—how users interact with agents.
+
+| Channel | Use Case | Features |
+|---------|----------|----------|
+| Terminal | CLI interaction | Styled output, streaming |
+| TUI | Rich terminal | Bubble Tea, syntax highlight |
+| Slack | Team collaboration | Thread support, Socket Mode |
+| API | Programmatic | REST, streaming |
+
+**Interface:**
+```go
+type Channel interface {
+    Start(ctx context.Context) error
+    Send(ctx context.Context, msg Message) error
+    Receive(ctx context.Context) (Message, error)
+    Stop() error
+    Name() string
+}
+```
+
+### Orchestrator
+
+Routes messages to appropriate agents based on content, rules, or AI decision.
+
+**Routing Modes:**
+- **Disabled**: Single agent, no routing
+- **Rules**: Regex pattern matching
+- **AI**: LLM-based routing decisions
+- **Hybrid**: Rules first, AI fallback
+
+```
+Message → Rules Check → AI Router → Agent Selection → Dispatch
+```
+
+### Agent
+
+The core execution unit. Coordinates:
+- Conversation history management
+- LLM communication
+- Tool execution loop
+- Memory integration
+
+**Agent Loop:**
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      AGENT LOOP                              │
+│                                                              │
+│  ┌────────┐    ┌────────┐    ┌────────┐    ┌────────┐      │
+│  │Receive │ → │  LLM   │ → │ Tools  │ → │ Result │ ─┐    │
+│  │ Input  │    │Decision│    │Execute │    │Process │  │    │
+│  └────────┘    └────────┘    └────────┘    └────────┘  │    │
+│       ▲                                                 │    │
+│       └─────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Provider
+
+LLM abstraction layer supporting multiple backends.
+
+| Provider | Models | Features |
+|----------|--------|----------|
+| Anthropic | Claude family | Native streaming |
+| OpenRouter | 100+ models | Gateway |
+| each::labs | 300+ models | Unified API |
+
+**Interface:**
+```go
+type Provider interface {
+    Chat(ctx context.Context, messages []Message) (string, error)
+    Stream(ctx context.Context, messages []Message) (<-chan StreamEvent, error)
+    Name() string
+    Models() []string
+}
+```
+
+### Tools
+
+Actions agents can perform. Built-in tools cover common operations.
+
+| Category | Tools |
+|----------|-------|
+| Execution | bash |
+| File ops | read, write, edit, glob, grep |
+| Web | web_fetch, web_search |
+| Meta | agent_spawn, skill, cron |
+
+### Memory
+
+Persistent context system with workspace files.
+
+```
+~/.klaw/workspace/
+├── SOUL.md      # Identity
+├── AGENTS.md    # Registry
+├── TOOLS.md     # Documentation
+├── USER.md      # Preferences
+└── MEMORY.md    # Learned patterns
+```
+
+### Scheduler
+
+Cron-based task scheduling for automated workflows.
+
+```go
+type Job struct {
+    Name     string
+    Schedule string  // Cron expression
+    Agent    string
+    Task     string
+    Enabled  bool
+}
+```
+
+## Deployment Modes
+
+### Single-Node
+
+Everything runs on one machine:
+
+```
+┌─────────────────────────────────────────┐
+│              SINGLE NODE                 │
+│  ┌─────────────────────────────────┐    │
+│  │  Channels → Orchestrator → Agents │    │
+│  │  Scheduler → Tools → Memory       │    │
+│  └─────────────────────────────────┘    │
+└─────────────────────────────────────────┘
+```
+
+Commands: `klaw chat`, `klaw start`
+
+### Distributed
+
+Controller manages multiple worker nodes:
+
+```
+┌─────────────────────────────────────────┐
+│              CONTROLLER                  │
+│  Agent Registry │ Task Dispatcher       │
+│  State Manager  │ Node Manager          │
+└─────────────────┬───────────────────────┘
+                  │ TCP/JSON
+    ┌─────────────┼─────────────┐
+    ▼             ▼             ▼
+┌─────────┐  ┌─────────┐  ┌─────────┐
+│ NODE 1  │  │ NODE 2  │  │ NODE 3  │
+│ Agents  │  │ Agents  │  │ Agents  │
+└─────────┘  └─────────┘  └─────────┘
+```
+
+Commands: `klaw controller start`, `klaw node join`
+
+### Container
+
+Agents run in isolated Podman containers:
+
+```
+┌─────────────────────────────────────────┐
+│              HOST SYSTEM                 │
+│  ┌─────────────┐  ┌─────────────┐       │
+│  │  Container  │  │  Container  │       │
+│  │  Agent A    │  │  Agent B    │       │
+│  └─────────────┘  └─────────────┘       │
+└─────────────────────────────────────────┘
+```
+
+Commands: `klaw build`, `klaw run`, `klaw ps`
+
+## Data Flow
+
+### Chat Flow
+
+```
+1. User types message in CLI
+2. Terminal channel receives message
+3. Message sent to agent
+4. Agent adds to conversation history
+5. Agent calls provider.Stream()
+6. Provider sends to LLM API
+7. LLM returns tool calls or text
+8. If tool calls: execute tools, add results, goto 5
+9. If text: stream to channel
+10. Channel displays to user
+```
+
+### Slack Flow
+
+```
+1. User @mentions bot in Slack
+2. Slack channel receives via Socket Mode
+3. Orchestrator routes to appropriate agent
+4. Agent processes with tools
+5. Response sent back to Slack thread
+```
+
+### Task Dispatch Flow
+
+```
+1. CLI sends dispatch request
+2. Controller finds agent on available node
+3. Task sent to node via TCP
+4. Node executes agent with task
+5. Results streamed back to controller
+6. Controller streams to CLI
+```
+
+## State Management
+
+### Local State
+
+- Config: `~/.klaw/config.toml`
+- Agents: `~/.klaw/agents/*.toml`
+- Skills: `~/.klaw/skills/`
+- Sessions: `~/.klaw/sessions/`
+
+### Distributed State
+
+Controller maintains:
+- Node registry (connected nodes)
+- Agent registry (available agents per node)
+- Task queue (pending/running/completed)
+
+Optional etcd backend for HA:
+```bash
+klaw controller start --etcd-endpoints etcd1:2379
+```
+
+## Extension Points
+
+| Extension | Mechanism |
+|-----------|-----------|
+| New channels | Implement Channel interface |
+| New providers | Implement Provider interface |
+| New tools | Implement Tool interface |
+| New skills | TOML definition + optional Go code |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Agent Loop"
+    icon="rotate"
+    href="/architecture/agent-loop"
+  >
+    Deep dive into agent execution
+  </Card>
+  <Card
+    title="Distributed Mode"
+    icon="server"
+    href="/architecture/distributed-mode"
+  >
+    Controller-node architecture
+  </Card>
+</CardGroup>

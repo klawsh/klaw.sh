@@ -1,0 +1,422 @@
+---
+title: Skills
+description: 'Composable capability bundles for agents'
+---
+
+## What are Skills?
+
+**Skills** are composable capability bundles that enhance agent functionality. They package together:
+
+- A set of related tools
+- System prompt additions
+- Configuration parameters
+- Optional external dependencies
+
+Think of skills like npm packages or Kubernetes operators—reusable modules that extend the base system.
+
+## Skill Architecture
+
+```
+┌─────────────────────────────────────────────────────┐
+│                     SKILL                           │
+│  ┌───────────────────────────────────────────────┐  │
+│  │               Metadata                        │  │
+│  │  name, version, description, author           │  │
+│  └───────────────────────────────────────────────┘  │
+│  ┌───────────────────────────────────────────────┐  │
+│  │               Tools                           │  │
+│  │  [tool1] [tool2] [tool3]                      │  │
+│  └───────────────────────────────────────────────┘  │
+│  ┌───────────────────────────────────────────────┐  │
+│  │           System Prompt                       │  │
+│  │  Instructions for using this skill            │  │
+│  └───────────────────────────────────────────────┘  │
+│  ┌───────────────────────────────────────────────┐  │
+│  │            Config                             │  │
+│  │  Skill-specific parameters                    │  │
+│  └───────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────┘
+```
+
+## Built-in Skills
+
+klaw includes 10+ skills out of the box:
+
+<CardGroup cols={2}>
+  <Card title="web-search" icon="magnifying-glass">
+    Search the internet and retrieve information.
+
+    **Tools:** `web_search`, `web_fetch`
+  </Card>
+  <Card title="browser" icon="globe">
+    Interactive web browsing and scraping.
+
+    **Tools:** `web_fetch`, `web_screenshot`
+  </Card>
+  <Card title="code-exec" icon="code">
+    Execute code in sandboxed environments.
+
+    **Tools:** `code_run`, `code_eval`
+  </Card>
+  <Card title="git" icon="code-branch">
+    Version control operations.
+
+    **Tools:** `git_status`, `git_commit`, `git_push`
+  </Card>
+  <Card title="docker" icon="docker">
+    Container management.
+
+    **Tools:** `docker_run`, `docker_build`, `docker_ps`
+  </Card>
+  <Card title="database" icon="database">
+    SQL database interactions.
+
+    **Tools:** `sql_query`, `sql_exec`
+  </Card>
+  <Card title="api" icon="plug">
+    REST API interactions.
+
+    **Tools:** `http_get`, `http_post`, `http_request`
+  </Card>
+  <Card title="slack" icon="slack">
+    Slack messaging and management.
+
+    **Tools:** `slack_send`, `slack_read`
+  </Card>
+  <Card title="email" icon="envelope">
+    Email sending and reading.
+
+    **Tools:** `email_send`, `email_read`
+  </Card>
+  <Card title="calendar" icon="calendar">
+    Calendar management.
+
+    **Tools:** `calendar_create`, `calendar_list`
+  </Card>
+</CardGroup>
+
+## Managing Skills
+
+### List Available Skills
+
+```bash
+klaw skill list
+```
+
+Output:
+```
+NAME         VERSION  STATUS     DESCRIPTION
+web-search   1.0.0    installed  Search the internet
+browser      1.0.0    available  Web browsing capabilities
+code-exec    1.0.0    installed  Code execution sandbox
+git          1.0.0    available  Git version control
+docker       1.0.0    available  Docker container management
+database     1.0.0    available  SQL database interactions
+api          1.0.0    available  REST API client
+slack        1.0.0    available  Slack integration
+email        1.0.0    available  Email capabilities
+calendar     1.0.0    available  Calendar management
+```
+
+### Install a Skill
+
+```bash
+klaw skill install browser
+```
+
+### Uninstall a Skill
+
+```bash
+klaw skill uninstall browser
+```
+
+### View Skill Details
+
+```bash
+klaw skill describe web-search
+```
+
+Output:
+```yaml
+Name:        web-search
+Version:     1.0.0
+Description: Search the internet and retrieve information
+Author:      each::labs
+Status:      installed
+
+Tools:
+  - web_search: Search the web for information
+  - web_fetch: Fetch and process a URL
+
+System Prompt:
+  You have access to web search capabilities. Use web_search
+  to find current information and web_fetch to read specific
+  pages. Always cite your sources.
+
+Config:
+  max_results: 10
+  safe_search: true
+```
+
+## Using Skills with Agents
+
+### At Creation Time
+
+```bash
+klaw create agent researcher \
+  --model claude-sonnet-4-20250514 \
+  --skills web-search,browser,code-exec
+```
+
+### In Agent Definition
+
+```toml
+# ~/.klaw/agents/researcher.toml
+name = "researcher"
+model = "claude-sonnet-4-20250514"
+skills = ["web-search", "browser", "code-exec"]
+
+[skill_config.web-search]
+max_results = 20
+
+[skill_config.database]
+connection_string = "${DATABASE_URL}"
+```
+
+## Skill Composition
+
+Skills can be combined to create powerful agents:
+
+```
+┌─────────────────────────────────────────────────────┐
+│            FULL-STACK DEVELOPER AGENT               │
+│                                                     │
+│  Skills: code-exec + git + docker + database        │
+│                                                     │
+│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐  │
+│  │code-exec│ │   git   │ │ docker  │ │database │  │
+│  └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘  │
+│       │           │           │           │        │
+│       └───────────┴───────────┴───────────┘        │
+│                       │                            │
+│                       ▼                            │
+│              Combined Tool Registry                │
+│              Merged System Prompts                 │
+└─────────────────────────────────────────────────────┘
+```
+
+### Example: DevOps Agent
+
+```bash
+klaw create agent devops \
+  --model gpt-4o \
+  --skills docker,git,api \
+  --task "Manage deployments and infrastructure"
+```
+
+### Example: Research Agent
+
+```bash
+klaw create agent researcher \
+  --model claude-sonnet-4-20250514 \
+  --skills web-search,browser \
+  --task "Research topics and compile reports"
+```
+
+## Skill Definition Format
+
+Skills are defined in TOML format:
+
+```toml
+# skill.toml
+name = "my-skill"
+version = "1.0.0"
+description = "My custom skill"
+author = "Your Name"
+
+# Tools this skill provides
+tools = ["my_tool_1", "my_tool_2"]
+
+# System prompt addition
+system_prompt = """
+You have access to my custom tools.
+Use my_tool_1 for X and my_tool_2 for Y.
+Always follow best practices when using these tools.
+"""
+
+# Configuration schema
+[config]
+api_key = { type = "string", required = true, env = "MY_API_KEY" }
+timeout = { type = "integer", default = 30 }
+```
+
+## Skill Registry
+
+Skills are stored and loaded from:
+
+```
+~/.klaw/
+├── skills/
+│   ├── installed.json    # Installed skills registry
+│   ├── web-search/       # Skill files
+│   ├── browser/
+│   └── custom-skill/
+```
+
+### installed.json
+
+```json
+{
+  "skills": {
+    "web-search": {
+      "version": "1.0.0",
+      "installed_at": "2024-12-14T10:00:00Z",
+      "source": "builtin"
+    },
+    "custom-skill": {
+      "version": "1.0.0",
+      "installed_at": "2024-12-14T11:00:00Z",
+      "source": "local"
+    }
+  }
+}
+```
+
+## Creating Custom Skills
+
+### Step 1: Create Skill Directory
+
+```bash
+mkdir -p ~/.klaw/skills/my-skill
+```
+
+### Step 2: Define the Skill
+
+```toml
+# ~/.klaw/skills/my-skill/skill.toml
+name = "my-skill"
+version = "1.0.0"
+description = "My custom skill for doing X"
+
+tools = ["my_tool"]
+
+system_prompt = """
+You have access to my_tool which does X.
+Use it when the user asks about Y.
+"""
+```
+
+### Step 3: Implement Tools (Optional)
+
+For custom tools, create a Go file:
+
+```go
+// ~/.klaw/skills/my-skill/tools.go
+package myskill
+
+type MyTool struct{}
+
+func (t *MyTool) Name() string { return "my_tool" }
+// ... implement Tool interface
+```
+
+### Step 4: Install
+
+```bash
+klaw skill install ./my-skill
+```
+
+## Remote Skills
+
+Install skills from the marketplace:
+
+```bash
+# From skills.sh marketplace
+klaw skill install skills.sh/eachlabs/notion
+
+# From GitHub
+klaw skill install github.com/user/repo
+
+# From URL
+klaw skill install https://example.com/skill.tar.gz
+```
+
+## Skill Configuration
+
+Configure skill behavior per-agent:
+
+```toml
+# ~/.klaw/agents/my-agent.toml
+name = "my-agent"
+skills = ["database", "api"]
+
+[skill_config.database]
+connection_string = "${DATABASE_URL}"
+max_connections = 10
+
+[skill_config.api]
+base_url = "https://api.example.com"
+auth_header = "Bearer ${API_TOKEN}"
+```
+
+## System Prompt Composition
+
+When multiple skills are used, their system prompts are merged:
+
+```
+┌─────────────────────────────────────────────────────┐
+│              FINAL SYSTEM PROMPT                    │
+├─────────────────────────────────────────────────────┤
+│ Base Agent Prompt                                   │
+│ ───────────────────────────────────────────────────│
+│ You are a helpful assistant...                      │
+├─────────────────────────────────────────────────────┤
+│ Skill: web-search                                   │
+│ ───────────────────────────────────────────────────│
+│ You can search the web using web_search...          │
+├─────────────────────────────────────────────────────┤
+│ Skill: code-exec                                    │
+│ ───────────────────────────────────────────────────│
+│ You can execute code using code_run...              │
+├─────────────────────────────────────────────────────┤
+│ Workspace Context                                   │
+│ ───────────────────────────────────────────────────│
+│ [SOUL.md content]                                   │
+└─────────────────────────────────────────────────────┘
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion icon="minimize" title="Keep skills focused">
+    Each skill should do one thing well. Don't create monolithic skills.
+  </Accordion>
+  <Accordion icon="lock" title="Secure credentials">
+    Use environment variables for API keys and secrets, never hardcode them.
+  </Accordion>
+  <Accordion icon="book" title="Document thoroughly">
+    Write clear system prompts that explain when and how to use each tool.
+  </Accordion>
+  <Accordion icon="test-tube" title="Test before deploying">
+    Test skills locally before installing on production agents.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Memory System"
+    icon="brain"
+    href="/concepts/memory"
+  >
+    Learn about persistent agent context
+  </Card>
+  <Card
+    title="Custom Tools"
+    icon="wrench"
+    href="/guides/custom-tools"
+  >
+    Build your own tools and skills
+  </Card>
+</CardGroup>

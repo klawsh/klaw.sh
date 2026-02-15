@@ -1,0 +1,79 @@
+---
+title: Distributed Mode
+description: 'Controller-node architecture for scaling'
+---
+
+## Overview
+
+klaw's distributed mode enables scaling across multiple machines using a controller-node architecture, similar to Kubernetes master-worker topology.
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                       CONTROLLER                             │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │  Node Manager    │  Agent Registry  │  Task Dispatcher │  │
+│  └───────────────────────────────────────────────────────┘  │
+│                           │                                  │
+│                    TCP/JSON (port 9090)                     │
+│                           │                                  │
+└───────────────────────────┼──────────────────────────────────┘
+                            │
+            ┌───────────────┼───────────────┐
+            │               │               │
+            ▼               ▼               ▼
+     ┌─────────────┐ ┌─────────────┐ ┌─────────────┐
+     │   NODE 1    │ │   NODE 2    │ │   NODE 3    │
+     │  Agents:    │ │  Agents:    │ │  Agents:    │
+     │  - coder    │ │  - research │ │  - devops   │
+     │  - tester   │ │  - analyst  │ │  - monitor  │
+     └─────────────┘ └─────────────┘ └─────────────┘
+```
+
+## Controller
+
+The controller is the central brain managing the cluster.
+
+### Starting the Controller
+
+```bash
+klaw controller start --port 9090 --token my-secret-token
+```
+
+## Nodes
+
+Worker nodes connect to the controller and run agents locally.
+
+### Join a Controller
+
+```bash
+klaw node join controller:9090 --token my-secret-token
+```
+
+## Task Dispatch
+
+```bash
+klaw dispatch "analyze this codebase" --agent researcher
+```
+
+The controller finds a node with the agent and routes the task.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Namespaces"
+    icon="folder-tree"
+    href="/architecture/namespaces-clusters"
+  >
+    Multi-tenant organization
+  </Card>
+  <Card
+    title="Deployment Guide"
+    icon="server"
+    href="/guides/distributed-deployment"
+  >
+    Step-by-step setup
+  </Card>
+</CardGroup>

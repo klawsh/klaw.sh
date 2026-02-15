@@ -1,0 +1,305 @@
+---
+title: Your First Agent
+description: 'Create and configure your first custom agent'
+---
+
+## Overview
+
+In this guide, you'll create a specialized AI agent, configure its capabilities, and use it to accomplish real tasks. By the end, you'll understand how to build agents tailored to your needs.
+
+## Prerequisites
+
+- klaw installed and configured ([Installation Guide](/installation))
+- API key configured (`ANTHROPIC_API_KEY` or `EACHLABS_API_KEY`)
+
+## Step 1: Initialize klaw
+
+If you haven't already, initialize klaw's configuration:
+
+```bash
+klaw init
+```
+
+This creates the `~/.klaw` directory with default configuration files.
+
+## Step 2: Create Your Agent
+
+Let's create a coding agent specialized for Go development:
+
+```bash
+klaw create agent go-developer \
+  --model claude-sonnet-4-20250514 \
+  --skills code-exec,git \
+  --task "Go development, code review, and debugging"
+```
+
+Verify the agent was created:
+
+```bash
+klaw get agents
+```
+
+Output:
+```
+NAME           MODEL                      SKILLS         STATUS
+go-developer   claude-sonnet-4-20250514   code-exec,git  Ready
+```
+
+## Step 3: Examine the Agent Definition
+
+View the agent's configuration:
+
+```bash
+klaw describe agent go-developer
+```
+
+Output:
+```yaml
+Name:       go-developer
+Model:      claude-sonnet-4-20250514
+Task:       Go development, code review, and debugging
+Skills:     code-exec, git
+Workdir:
+Runtime:    process
+Created:    2024-12-14T10:00:00Z
+Status:     Ready
+```
+
+The agent definition is stored in `~/.klaw/agents/go-developer.toml`:
+
+```toml
+name = "go-developer"
+model = "claude-sonnet-4-20250514"
+task = "Go development, code review, and debugging"
+skills = ["code-exec", "git"]
+runtime = "process"
+created_at = 2024-12-14T10:00:00Z
+```
+
+## Step 4: Chat with Your Agent
+
+Start a conversation with your agent:
+
+```bash
+klaw chat --agent go-developer
+```
+
+Now you can interact with your specialized Go developer:
+
+```
+> Review this function for potential issues:
+> func ProcessItems(items []Item) {
+>     for i := 0; i < len(items); i++ {
+>         process(items[i])
+>     }
+> }
+
+I've reviewed this function. Here are some suggestions:
+
+1. **Use range loop**: More idiomatic Go
+2. **Consider concurrency**: If processing is independent
+3. **Error handling**: process() should return errors
+
+Here's an improved version:
+
+func ProcessItems(items []Item) error {
+    for _, item := range items {
+        if err := process(item); err != nil {
+            return fmt.Errorf("processing item: %w", err)
+        }
+    }
+    return nil
+}
+```
+
+## Step 5: Add More Skills
+
+Enhance your agent with additional capabilities:
+
+```bash
+# Install skills first
+klaw skill install web-search
+klaw skill install database
+
+# Update the agent
+klaw create agent go-developer \
+  --model claude-sonnet-4-20250514 \
+  --skills code-exec,git,web-search,database \
+  --task "Go development with research and database capabilities"
+```
+
+## Step 6: Run Agent Tasks
+
+### One-Shot Tasks
+
+Execute a single task:
+
+```bash
+klaw dispatch "Review the error handling in internal/api/" --agent go-developer
+```
+
+### Interactive Mode
+
+For ongoing work:
+
+```bash
+klaw chat --agent go-developer
+```
+
+### Container Mode
+
+Run in isolation:
+
+```bash
+# Build container image first
+klaw build
+
+# Run agent in container
+klaw run go-developer --task "Analyze the codebase structure"
+```
+
+## Step 7: Configure the Workspace
+
+Customize the agent's context by editing workspace files:
+
+### SOUL.md - Agent Identity
+
+Edit `~/.klaw/workspace/SOUL.md`:
+
+```markdown
+# Soul
+
+You are a senior Go developer with expertise in:
+- Clean architecture
+- Performance optimization
+- Testing best practices
+
+## Principles
+
+1. Write idiomatic Go code
+2. Prioritize readability over cleverness
+3. Always handle errors explicitly
+4. Write comprehensive tests
+```
+
+### USER.md - Your Preferences
+
+Create `~/.klaw/workspace/USER.md`:
+
+```markdown
+# User Context
+
+## Code Style
+- Use short variable names in small scopes
+- Prefer early returns over deep nesting
+- Group imports: stdlib, external, internal
+
+## Project Conventions
+- Tests use table-driven approach
+- Errors wrap with context
+- Interfaces defined where used
+```
+
+## Creating More Agents
+
+Here are some useful agent configurations:
+
+### Research Agent
+
+```bash
+klaw create agent researcher \
+  --model claude-sonnet-4-20250514 \
+  --skills web-search,browser \
+  --task "Research topics and compile comprehensive reports"
+```
+
+### DevOps Agent
+
+```bash
+klaw create agent devops \
+  --model claude-sonnet-4-20250514 \
+  --skills docker,git \
+  --task "Manage deployments, containers, and infrastructure"
+```
+
+### Documentation Agent
+
+```bash
+klaw create agent docs \
+  --model claude-sonnet-4-20250514 \
+  --skills code-exec \
+  --task "Generate and update documentation"
+```
+
+## Using Multiple Agents
+
+You can route messages to different agents:
+
+```bash
+# In chat, use @ to specify agent
+> @researcher Find best practices for Go error handling
+> @go-developer Implement those patterns in our codebase
+> @docs Update the error handling documentation
+```
+
+Or dispatch tasks programmatically:
+
+```bash
+klaw dispatch "Research Go 1.24 features" --agent researcher
+klaw dispatch "Update code for Go 1.24" --agent go-developer
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion icon="target" title="Define clear purposes">
+    Each agent should have a specific focus. Specialized agents perform better than generalists.
+  </Accordion>
+  <Accordion icon="minimize" title="Start with minimal skills">
+    Add skills as needed. Fewer skills mean faster responses and lower token usage.
+  </Accordion>
+  <Accordion icon="gear" title="Use appropriate models">
+    - **Sonnet**: General tasks, coding, research
+    - **Opus**: Complex reasoning, architecture decisions
+    - **Haiku**: Quick responses, simple tasks
+  </Accordion>
+  <Accordion icon="folder" title="Set working directories">
+    For file-focused agents, set a workdir to contain operations:
+    ```bash
+    klaw create agent coder --workdir /path/to/project
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Slack Integration"
+    icon="slack"
+    href="/guides/slack-integration"
+  >
+    Deploy your agent to Slack
+  </Card>
+  <Card
+    title="Custom Tools"
+    icon="wrench"
+    href="/guides/custom-tools"
+  >
+    Build custom tools for your agents
+  </Card>
+  <Card
+    title="Multi-Agent Workflows"
+    icon="sitemap"
+    href="/guides/multi-agent-workflows"
+  >
+    Orchestrate multiple agents together
+  </Card>
+  <Card
+    title="Distributed Deployment"
+    icon="server"
+    href="/guides/distributed-deployment"
+  >
+    Scale across multiple machines
+  </Card>
+</CardGroup>

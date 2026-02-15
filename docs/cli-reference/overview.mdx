@@ -1,0 +1,240 @@
+---
+title: CLI Overview
+description: 'Complete command-line reference for klaw'
+---
+
+## Basic Usage
+
+```bash
+klaw [command] [subcommand] [flags]
+```
+
+## Global Flags
+
+| Flag | Description |
+|------|-------------|
+| `--help`, `-h` | Show help for any command |
+| `--version`, `-v` | Show version information |
+| `--config` | Path to config file |
+| `--json` | Output in JSON format |
+
+## Command Categories
+
+### Core Commands
+
+| Command | Description |
+|---------|-------------|
+| `klaw chat` | Interactive terminal chat |
+| `klaw start` | Start platform (Slack + scheduler) |
+| `klaw dispatch` | Send one-shot task to agent |
+| `klaw init` | Initialize klaw configuration |
+
+### Agent Management
+
+| Command | Description |
+|---------|-------------|
+| `klaw create agent` | Create a new agent |
+| `klaw get agents` | List all agents |
+| `klaw describe agent` | Show agent details |
+| `klaw delete agent` | Delete an agent |
+
+### Container Operations
+
+| Command | Description |
+|---------|-------------|
+| `klaw build` | Build container image |
+| `klaw run` | Run agent in container |
+| `klaw ps` | List running containers |
+| `klaw logs` | View container logs |
+| `klaw stop` | Stop container |
+| `klaw attach` | Attach to container |
+
+### Cluster Operations
+
+| Command | Description |
+|---------|-------------|
+| `klaw controller start` | Start controller |
+| `klaw controller status` | Show controller status |
+| `klaw node join` | Join a controller |
+| `klaw node status` | Show node status |
+| `klaw get nodes` | List connected nodes |
+| `klaw get tasks` | List dispatched tasks |
+
+### Namespace Management
+
+| Command | Description |
+|---------|-------------|
+| `klaw create cluster` | Create a cluster |
+| `klaw create namespace` | Create a namespace |
+| `klaw get clusters` | List clusters |
+| `klaw get namespaces` | List namespaces |
+| `klaw context use` | Switch context |
+| `klaw context list` | List contexts |
+
+### Skill Management
+
+| Command | Description |
+|---------|-------------|
+| `klaw skill list` | List available skills |
+| `klaw skill install` | Install a skill |
+| `klaw skill uninstall` | Remove a skill |
+| `klaw skill show` | Show skill details |
+| `klaw skill create` | Create new skill |
+
+### Cron Jobs
+
+| Command | Description |
+|---------|-------------|
+| `klaw cron create` | Create cron job |
+| `klaw cron list` | List cron jobs |
+| `klaw cron enable` | Enable a job |
+| `klaw cron disable` | Disable a job |
+| `klaw cron delete` | Delete a job |
+| `klaw cron run` | Run job manually |
+
+### Configuration
+
+| Command | Description |
+|---------|-------------|
+| `klaw config view` | View configuration |
+| `klaw config set` | Set config value |
+| `klaw config reset` | Reset to defaults |
+
+## Quick Reference
+
+### Start Interactive Chat
+
+```bash
+klaw chat
+klaw chat --tui
+klaw chat --model gpt-4o
+klaw chat --agent coder
+```
+
+### Start Full Platform
+
+```bash
+klaw start
+klaw start --provider anthropic
+klaw start --model claude-sonnet-4-20250514
+```
+
+### Create and Use Agents
+
+```bash
+# Create
+klaw create agent myagent \
+  --model claude-sonnet-4-20250514 \
+  --skills code-exec,git \
+  --task "Development tasks"
+
+# List
+klaw get agents
+
+# Use
+klaw chat --agent myagent
+klaw dispatch "fix the bug" --agent myagent
+```
+
+### Run in Container
+
+```bash
+klaw build
+klaw run myagent --task "Review code"
+klaw run myagent --detach
+klaw ps
+klaw logs myagent
+klaw stop myagent
+```
+
+### Distributed Mode
+
+```bash
+# Controller
+klaw controller start --port 9090 --token mytoken
+
+# Node
+klaw node join controller:9090 --token mytoken
+
+# Dispatch
+klaw dispatch "analyze codebase" --agent researcher
+```
+
+### Manage Skills
+
+```bash
+klaw skill list
+klaw skill install web-search
+klaw skill show web-search
+```
+
+### Cron Jobs
+
+```bash
+klaw cron create daily-report \
+  --schedule "0 9 * * *" \
+  --agent reporter \
+  --task "Generate report"
+
+klaw cron list
+klaw cron enable daily-report
+```
+
+## Output Formats
+
+### Default (Human-Readable)
+
+```bash
+klaw get agents
+```
+
+```
+NAME     MODEL                      SKILLS         STATUS
+coder    claude-sonnet-4-20250514   code-exec,git  Ready
+```
+
+### JSON
+
+```bash
+klaw get agents --json
+```
+
+```json
+[
+  {
+    "name": "coder",
+    "model": "claude-sonnet-4-20250514",
+    "skills": ["code-exec", "git"],
+    "status": "Ready"
+  }
+]
+```
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | Success |
+| 1 | General error |
+| 2 | Invalid arguments |
+| 3 | Configuration error |
+| 4 | Connection error |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="chat Command"
+    icon="message"
+    href="/cli-reference/chat"
+  >
+    Interactive chat details
+  </Card>
+  <Card
+    title="agent Commands"
+    icon="robot"
+    href="/cli-reference/agent"
+  >
+    Agent management
+  </Card>
+</CardGroup>

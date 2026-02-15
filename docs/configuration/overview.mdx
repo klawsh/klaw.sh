@@ -1,0 +1,321 @@
+---
+title: Configuration Overview
+description: 'Complete guide to configuring klaw'
+---
+
+## Configuration Files
+
+klaw uses TOML for configuration. Files are stored in `~/.klaw/`:
+
+```
+~/.klaw/
+├── config.toml          # Main configuration
+├── workspace/           # Agent context files
+│   ├── SOUL.md
+│   ├── AGENTS.md
+│   └── TOOLS.md
+├── agents/              # Agent definitions
+├── skills/              # Installed skills
+└── state/               # Runtime state
+```
+
+## Main Configuration
+
+### Full Example
+
+```toml
+# ~/.klaw/config.toml
+
+# Default settings
+[defaults]
+model = "claude-sonnet-4-20250514"
+agent = "default"
+namespace = "default"
+
+# Workspace directory
+[workspace]
+path = "~/.klaw/workspace"
+
+# LLM Providers
+[provider.anthropic]
+api_key = "${ANTHROPIC_API_KEY}"
+model = "claude-sonnet-4-20250514"
+
+[provider.openrouter]
+api_key = "${OPENROUTER_API_KEY}"
+model = "anthropic/claude-sonnet-4"
+
+[provider.eachlabs]
+api_key = "${EACHLABS_API_KEY}"
+model = "anthropic/claude-sonnet-4-5"
+
+# Slack integration
+[channel.slack]
+enabled = true
+bot_token = "${SLACK_BOT_TOKEN}"
+app_token = "${SLACK_APP_TOKEN}"
+
+# Orchestrator settings
+[orchestrator]
+mode = "hybrid"
+default_agent = "default"
+
+[[orchestrator.rules]]
+pattern = "(?i)(code|bug|fix)"
+agent = "coder"
+
+[[orchestrator.rules]]
+pattern = "(?i)(research|search)"
+agent = "researcher"
+
+# Server settings
+[server]
+port = 8080
+host = "127.0.0.1"
+
+# Logging
+[logging]
+level = "info"
+file = "~/.klaw/logs/klaw.log"
+
+# Tools configuration
+[tools]
+timeout = 120000
+output_limit = 30000
+```
+
+## Environment Variables
+
+Environment variables override config file values:
+
+```bash
+# Provider API Keys
+export ANTHROPIC_API_KEY=sk-ant-...
+export OPENROUTER_API_KEY=sk-or-...
+export EACHLABS_API_KEY=...
+
+# Slack
+export SLACK_BOT_TOKEN=xoxb-...
+export SLACK_APP_TOKEN=xapp-...
+
+# Overrides
+export KLAW_MODEL=claude-sonnet-4-20250514
+export KLAW_STATE_DIR=/custom/path
+```
+
+### Variable Reference
+
+Use `${VAR_NAME}` in config files:
+
+```toml
+[provider.anthropic]
+api_key = "${ANTHROPIC_API_KEY}"
+```
+
+## Initialization
+
+Create default configuration:
+
+```bash
+klaw init
+```
+
+This creates:
+- `~/.klaw/config.toml` with defaults
+- `~/.klaw/workspace/` with template files
+- `~/.klaw/agents/` directory
+
+## Provider Configuration
+
+### Anthropic (Direct)
+
+```toml
+[provider.anthropic]
+api_key = "${ANTHROPIC_API_KEY}"
+model = "claude-sonnet-4-20250514"
+```
+
+### OpenRouter
+
+```toml
+[provider.openrouter]
+api_key = "${OPENROUTER_API_KEY}"
+model = "anthropic/claude-sonnet-4"
+```
+
+### each::labs
+
+```toml
+[provider.eachlabs]
+api_key = "${EACHLABS_API_KEY}"
+model = "anthropic/claude-sonnet-4-5"
+```
+
+### Provider Priority
+
+klaw auto-detects provider in this order:
+1. OpenRouter (if `OPENROUTER_API_KEY` set)
+2. each::labs (if `EACHLABS_API_KEY` set)
+3. Anthropic (if `ANTHROPIC_API_KEY` set)
+
+Override with `--provider`:
+```bash
+klaw chat --provider anthropic
+```
+
+## Channel Configuration
+
+### Slack
+
+```toml
+[channel.slack]
+enabled = true
+bot_token = "${SLACK_BOT_TOKEN}"
+app_token = "${SLACK_APP_TOKEN}"
+
+# Optional
+allowed_channels = ["C123", "C456"]
+default_agent = "assistant"
+```
+
+### API Server
+
+```toml
+[server]
+port = 8080
+host = "0.0.0.0"
+auth_token = "${API_TOKEN}"
+```
+
+## Orchestrator Configuration
+
+### Disabled (Single Agent)
+
+```toml
+[orchestrator]
+mode = "disabled"
+default_agent = "assistant"
+```
+
+### Rules-Based
+
+```toml
+[orchestrator]
+mode = "rules"
+default_agent = "assistant"
+
+[[orchestrator.rules]]
+pattern = "(?i)(code|implement|fix)"
+agent = "coder"
+
+[[orchestrator.rules]]
+pattern = "(?i)(deploy|docker)"
+agent = "devops"
+```
+
+### AI-Based
+
+```toml
+[orchestrator]
+mode = "ai"
+default_agent = "assistant"
+model = "claude-haiku-3"  # Fast model for routing
+```
+
+### Hybrid
+
+```toml
+[orchestrator]
+mode = "hybrid"
+default_agent = "assistant"
+model = "claude-haiku-3"
+
+# Rules checked first
+[[orchestrator.rules]]
+pattern = "(?i)deploy"
+agent = "devops"
+
+# AI handles everything else
+```
+
+## Tools Configuration
+
+```toml
+[tools]
+timeout = 120000          # 2 minutes default
+output_limit = 30000      # Max output chars
+
+[tools.bash]
+allowed_commands = ["git", "npm", "go"]
+blocked_commands = ["rm -rf /"]
+
+[tools.web]
+timeout = 30000
+allowed_domains = ["*.example.com"]
+```
+
+## Logging Configuration
+
+```toml
+[logging]
+level = "info"            # debug, info, warn, error
+file = "~/.klaw/logs/klaw.log"
+format = "json"           # json or text
+max_size = 100            # MB
+max_backups = 3
+```
+
+## Managing Configuration
+
+### View Current Config
+
+```bash
+klaw config view
+```
+
+### Set Values
+
+```bash
+klaw config set defaults.model claude-sonnet-4-20250514
+klaw config set logging.level debug
+```
+
+### Reset to Defaults
+
+```bash
+klaw config reset
+```
+
+## Context Management
+
+For distributed mode, manage cluster contexts:
+
+```bash
+# List contexts
+klaw context list
+
+# Use a context
+klaw context use production/engineering
+
+# Create context
+klaw context set mycontext --cluster prod --namespace eng
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Providers"
+    icon="plug"
+    href="/configuration/providers"
+  >
+    Configure LLM providers
+  </Card>
+  <Card
+    title="Channels"
+    icon="message"
+    href="/configuration/channels"
+  >
+    Set up communication channels
+  </Card>
+</CardGroup>

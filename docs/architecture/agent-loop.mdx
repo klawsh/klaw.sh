@@ -1,0 +1,213 @@
+---
+title: Agent Loop
+description: 'Deep dive into the agent execution cycle'
+---
+
+## Overview
+
+The agent loop is the heart of klaw. It orchestrates the conversation between user input, LLM decisions, and tool execution, continuing until a task is complete.
+
+## The Loop
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│                        AGENT LOOP                               │
+│                                                                 │
+│  ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐ │
+│  │ Receive  │ → │   LLM    │ → │  Execute │ → │  Format  │  │
+│  │  Input   │    │ Decision │    │  Tools   │    │ Results  │  │
+│  └──────────┘    └──────────┘    └──────────┘    └──────────┘  │
+│       ▲                                               │        │
+│       │                                               │        │
+│       └───────────────────────────────────────────────┘        │
+│                    (Repeat until complete)                     │
+└────────────────────────────────────────────────────────────────┘
+```
+
+## Step-by-Step Flow
+
+<Steps>
+  <Step title="Receive Input">
+    User sends a message through a channel (CLI, Slack, API).
+
+    ```go
+    msg, _ := channel.Receive(ctx)
+    history = append(history, Message{Role: "user", Content: msg})
+    ```
+  </Step>
+
+  <Step title="Send to LLM">
+    Agent sends conversation history to the LLM provider.
+
+    ```go
+    events, _ := provider.Stream(ctx, history)
+    ```
+  </Step>
+
+  <Step title="Process Stream">
+    Agent collects streaming events: text chunks, tool calls, stop signals.
+
+    ```go
+    for event := range events {
+        switch event.Type {
+        case "text":
+            channel.Send(ctx, Message{Content: event.Text, Partial: true})
+        case "tool_use":
+            toolCalls = append(toolCalls, event.ToolCall)
+        case "stop":
+            break
+        }
+    }
+    ```
+  </Step>
+
+  <Step title="Execute Tools">
+    If the LLM requested tools, execute them with timeout.
+
+    ```go
+    for _, call := range toolCalls {
+        ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+        result, _ := tools.Execute(ctx, call.Name, call.Input)
+        cancel()
+
+        toolResults = append(toolResults, result)
+    }
+    ```
+  </Step>
+
+  <Step title="Format Results">
+    Tool results are formatted and added to history.
+
+    ```go
+    history = append(history, Message{
+        Role: "assistant",
+        ToolCalls: toolCalls,
+    })
+
+    for i, result := range toolResults {
+        history = append(history, Message{
+            Role: "tool",
+            ToolCallID: toolCalls[i].ID,
+            Content: result,
+        })
+    }
+    ```
+  </Step>
+
+  <Step title="Loop or Complete">
+    If tools were called, loop back to send results to LLM.
+    If no tools, mark response as complete.
+
+    ```go
+    if len(toolCalls) > 0 {
+        continue // Back to Step 2
+    }
+
+    channel.Send(ctx, Message{Content: text, Done: true})
+    ```
+  </Step>
+</Steps>
+
+## Stream Events
+
+The provider returns a stream of events:
+
+| Event Type | Description |
+|------------|-------------|
+| `text` | Text chunk to stream to user |
+| `tool_use` | LLM wants to call a tool |
+| `tool_result` | Result of a tool call |
+| `error` | Error occurred |
+| `stop` | Generation complete |
+
+## Tool Execution
+
+### Timeout
+
+Each tool has a 2-minute timeout by default:
+
+```go
+ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+defer cancel()
+
+result, err := tool.Execute(ctx, input)
+```
+
+### Result Formatting
+
+Tool results are formatted for display:
+
+```
+╭──────────────────────────────────────────╮
+│ Tool: bash                               │
+│ Command: git status                      │
+├──────────────────────────────────────────┤
+│ On branch main                           │
+│ Your branch is up to date                │
+│ nothing to commit, working tree clean    │
+╰──────────────────────────────────────────╯
+```
+
+### Error Handling
+
+Tool errors are captured and fed back to the LLM:
+
+```go
+result, err := tool.Execute(ctx, input)
+if err != nil {
+    result = fmt.Sprintf("Error: %v", err)
+}
+// LLM sees the error and can adjust strategy
+```
+
+## Conversation History
+
+Each agent maintains conversation history:
+
+```go
+type Agent struct {
+    history map[string][]Message  // Per-conversation
+}
+```
+
+For thread-aware channels (Slack), each thread has its own history.
+
+## Memory Integration
+
+Before each LLM call, workspace context is loaded:
+
+```
+System Prompt = Base Instructions
+             + SOUL.md content
+             + AGENTS.md content
+             + TOOLS.md content
+             + Skill prompts
+```
+
+## Performance Considerations
+
+| Factor | Impact | Mitigation |
+|--------|--------|------------|
+| Tool execution time | Blocks loop | Timeout, async tools |
+| Large outputs | Token cost | Output truncation |
+| Many tool calls | Latency | Batching where possible |
+| Long history | Context limits | History pruning |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Tools Reference"
+    icon="wrench"
+    href="/tools/bash"
+  >
+    Available built-in tools
+  </Card>
+  <Card
+    title="Custom Tools"
+    icon="puzzle-piece"
+    href="/guides/custom-tools"
+  >
+    Build your own tools
+  </Card>
+</CardGroup>

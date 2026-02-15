@@ -1,0 +1,154 @@
+---
+title: Introduction
+description: 'Welcome to klaw - The Kubernetes for AI Agents'
+---
+
+<img
+  className="block dark:hidden"
+  src="/images/hero-light.svg"
+  alt="klaw Hero Light"
+/>
+<img
+  className="hidden dark:block"
+  src="/images/hero-dark.svg"
+  alt="klaw Hero Dark"
+/>
+
+## What is klaw?
+
+**klaw** is an open-source platform for deploying and managing AI agents at scale. Think of it as Kubernetes, but instead of containers, you're orchestrating intelligent agents that can code, research, communicate, and automate tasks.
+
+<CardGroup cols={2}>
+  <Card
+    title="Quick Start"
+    icon="rocket"
+    href="/quickstart"
+  >
+    Get up and running with klaw in under 5 minutes
+  </Card>
+  <Card
+    title="Core Concepts"
+    icon="lightbulb"
+    href="/concepts/agents"
+  >
+    Understand the fundamental building blocks
+  </Card>
+  <Card
+    title="Guides"
+    icon="book"
+    href="/guides/first-agent"
+  >
+    Step-by-step tutorials for common use cases
+  </Card>
+  <Card
+    title="CLI Reference"
+    icon="terminal"
+    href="/cli-reference/overview"
+  >
+    Complete command-line reference
+  </Card>
+</CardGroup>
+
+## Why klaw?
+
+### The Problem
+
+AI agents are powerful, but deploying them is a mess:
+
+- **Claude Code** is great but single-user and closed-source
+- **LangChain/CrewAI** require complex Python setups and don't scale
+- **Custom solutions** mean reinventing auth, tools, and deployment
+
+### The Solution
+
+klaw brings Kubernetes-style orchestration to AI agents with a single binary that runs anywhere.
+
+| Kubernetes | klaw | Purpose |
+|------------|------|---------|
+| Pod | Agent | Unit of deployment |
+| Deployment | AgentBinding | Desired state specification |
+| Service | Channel | How agents receive work |
+| Node | Node | Where agents run |
+| Namespace | Namespace | Isolation boundary |
+| kubectl | klaw | CLI interface |
+
+## Key Features
+
+<AccordionGroup>
+  <Accordion icon="microchip" title="300+ LLM Models">
+    Access Claude, GPT-4, Gemini, Llama, and 300+ more models through a single API using the each::labs router. No need to manage multiple API keys or endpoints.
+  </Accordion>
+  <Accordion icon="messages" title="Multi-Channel Support">
+    Deploy agents to CLI, Slack, Discord, Telegram, or REST API. Same agent, multiple surfaces.
+  </Accordion>
+  <Accordion icon="wrench" title="Built-in Tools">
+    Agents come with powerful capabilities out of the box: bash execution, file operations, web search, and more.
+  </Accordion>
+  <Accordion icon="puzzle-piece" title="Skills System">
+    Composable capability bundles that can be installed and combined to create specialized agents.
+  </Accordion>
+  <Accordion icon="server" title="Distributed Mode">
+    Scale from a single machine to enterprise clusters with controller-node architecture.
+  </Accordion>
+  <Accordion icon="box" title="Single Binary">
+    One ~20MB binary with zero external dependencies. No Python, no Node.js, no containers required.
+  </Accordion>
+</AccordionGroup>
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────┐
+│              CHANNELS                            │
+│  (Slack, CLI, TUI, API, Telegram, Discord)      │
+└──────────────────┬──────────────────────────────┘
+                   │
+         ┌─────────▼──────────┐
+         │   ORCHESTRATOR     │
+         │  (Message Routing) │
+         └─────────┬──────────┘
+                   │
+         ┌─────────▼──────────┐
+         │      AGENT         │
+         │ (LLM + Tool Loop)  │
+         └─────────┬──────────┘
+                   │
+    ┌──────┬───────┼───────┬──────┐
+    │      │       │       │      │
+    ▼      ▼       ▼       ▼      ▼
+  BASH   READ   WRITE   GREP   WEB
+```
+
+## Quick Example
+
+```bash
+# Install klaw
+curl -fsSL https://klaw.sh/install.sh | sh
+
+# Set your API key
+export ANTHROPIC_API_KEY=sk-ant-...
+
+# Start chatting
+klaw chat
+```
+
+That's it. You're running AI agents.
+
+## What's Next?
+
+<CardGroup cols={2}>
+  <Card
+    title="Installation"
+    icon="download"
+    href="/installation"
+  >
+    Detailed installation options for all platforms
+  </Card>
+  <Card
+    title="Your First Agent"
+    icon="wand-magic-sparkles"
+    href="/guides/first-agent"
+  >
+    Create and configure your first custom agent
+  </Card>
+</CardGroup>

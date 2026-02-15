@@ -1,0 +1,402 @@
+---
+title: Multi-Agent Workflows
+description: 'Orchestrate multiple agents for complex tasks'
+---
+
+## Overview
+
+Complex tasks often require different expertise. klaw supports multi-agent workflows where specialized agents collaborate, each contributing their unique capabilities. This guide covers patterns for effective multi-agent orchestration.
+
+## Why Multi-Agent?
+
+Single agents work well for focused tasks. But consider:
+
+| Task | Better Approach |
+|------|-----------------|
+| "Fix this bug" | Single agent (coder) |
+| "Research best practices, implement them, then write docs" | Multi-agent workflow |
+| "Review PR for code quality, security, and performance" | Multiple specialized reviewers |
+
+## Orchestrator Routing
+
+The simplest multi-agent pattern uses the orchestrator to route messages:
+
+### Configure Orchestrator
+
+```toml
+# ~/.klaw/config.toml
+[orchestrator]
+mode = "hybrid"
+default_agent = "assistant"
+
+[[orchestrator.rules]]
+pattern = "(?i)(code|bug|fix|implement|refactor)"
+agent = "coder"
+
+[[orchestrator.rules]]
+pattern = "(?i)(research|find|search|compare)"
+agent = "researcher"
+
+[[orchestrator.rules]]
+pattern = "(?i)(deploy|docker|kubernetes|infrastructure)"
+agent = "devops"
+```
+
+### Automatic Routing
+
+Messages are automatically routed:
+
+```
+User: "Fix the authentication bug"
+→ Routes to: coder
+
+User: "Research best practices for error handling"
+→ Routes to: researcher
+
+User: "Deploy to production"
+→ Routes to: devops
+```
+
+### Manual Routing
+
+Override with `@agent` syntax:
+
+```
+@researcher Find Go error handling patterns
+@coder Implement those patterns
+@devops Deploy the changes
+```
+
+## Agent Spawning
+
+Agents can spawn sub-agents for specific tasks:
+
+```
+┌─────────────────────────────────────────────────┐
+│               Main Agent                         │
+│  "Build a full-stack feature with tests"        │
+└──────────────────┬──────────────────────────────┘
+                   │
+     ┌─────────────┼─────────────┐
+     │             │             │
+     ▼             ▼             ▼
+┌─────────┐  ┌─────────┐  ┌─────────┐
+│Frontend │  │ Backend │  │  Tests  │
+│  Agent  │  │  Agent  │  │  Agent  │
+└─────────┘  └─────────┘  └─────────┘
+```
+
+### Using agent_spawn Tool
+
+```json
+{
+  "tool": "agent_spawn",
+  "input": {
+    "name": "frontend-worker",
+    "task": "Create React components for user authentication",
+    "model": "claude-sonnet-4-20250514"
+  }
+}
+```
+
+### In Practice
+
+```
+User: Build a user profile feature with frontend, backend, and tests
+
+Agent: I'll coordinate this by spawning specialized agents:
+
+[Tool: agent_spawn] Creating frontend-worker...
+[Tool: agent_spawn] Creating backend-worker...
+[Tool: agent_spawn] Creating test-writer...
+
+Frontend worker creating: ProfilePage.tsx, ProfileForm.tsx
+Backend worker creating: /api/profile endpoint
+Test worker creating: profile.test.ts, profile_test.go
+
+All components complete. The feature is ready for review.
+```
+
+## Workflow Patterns
+
+### Sequential Pipeline
+
+Each agent's output feeds the next:
+
+```
+Research → Implement → Review → Deploy
+```
+
+```bash
+# Step 1: Research
+klaw dispatch "Research authentication best practices" --agent researcher
+
+# Step 2: Implement (with research context)
+klaw dispatch "Implement auth based on research findings" --agent coder
+
+# Step 3: Review
+klaw dispatch "Review the authentication implementation" --agent reviewer
+
+# Step 4: Deploy
+klaw dispatch "Deploy the auth changes" --agent devops
+```
+
+### Parallel Execution
+
+Independent tasks run simultaneously:
+
+```
+     ┌── Security Review ──┐
+     │                     │
+Task ├── Code Review ──────┼── Aggregate
+     │                     │
+     └── Performance Review┘
+```
+
+In Slack or chat:
+
+```
+@security Review auth.go for vulnerabilities
+@coder Review auth.go for code quality
+@performance Review auth.go for performance issues
+```
+
+### Supervisor Pattern
+
+A coordinator agent manages workers:
+
+```go
+// The supervisor delegates and aggregates
+supervisor := agent.New(agent.Config{
+    SystemPrompt: `You are a project coordinator.
+    When given a task:
+    1. Break it into subtasks
+    2. Spawn appropriate agents for each
+    3. Monitor progress
+    4. Aggregate results
+    5. Report completion`,
+})
+```
+
+## Creating Specialized Teams
+
+### Development Team
+
+```bash
+# Create team members
+klaw create agent frontend \
+  --skills code-exec \
+  --task "React/TypeScript frontend development"
+
+klaw create agent backend \
+  --skills code-exec,database \
+  --task "Go/Python backend development"
+
+klaw create agent tester \
+  --skills code-exec \
+  --task "Writing and running tests"
+
+klaw create agent reviewer \
+  --skills code-exec,git \
+  --task "Code review and quality assurance"
+```
+
+### Research Team
+
+```bash
+klaw create agent researcher \
+  --skills web-search,browser \
+  --task "Primary research and data gathering"
+
+klaw create agent analyst \
+  --skills database,code-exec \
+  --task "Data analysis and insights"
+
+klaw create agent writer \
+  --skills code-exec \
+  --task "Writing reports and documentation"
+```
+
+### DevOps Team
+
+```bash
+klaw create agent deployer \
+  --skills docker,git \
+  --task "Deployment and releases"
+
+klaw create agent monitor \
+  --skills web-fetch,api \
+  --task "Monitoring and alerting"
+
+klaw create agent incident \
+  --skills docker,bash \
+  --task "Incident response and troubleshooting"
+```
+
+## Namespace-Based Teams
+
+Organize agents into namespaces for isolation:
+
+```bash
+# Create namespaces
+klaw create namespace frontend --cluster production
+klaw create namespace backend --cluster production
+klaw create namespace devops --cluster production
+
+# Bind agents to namespaces
+klaw create agent-binding react-dev \
+  --namespace frontend \
+  --agent frontend \
+  --skills code-exec
+
+klaw create agent-binding go-dev \
+  --namespace backend \
+  --agent backend \
+  --skills code-exec,database
+```
+
+Dispatch to namespace:
+
+```bash
+klaw dispatch "Build login form" --namespace frontend
+klaw dispatch "Create auth API" --namespace backend
+```
+
+## Communication Patterns
+
+### Shared Context via Workspace
+
+Agents share knowledge through workspace files:
+
+```markdown
+# ~/.klaw/workspace/PROJECT.md
+
+## Current Sprint
+- Authentication feature in progress
+- Frontend: @frontend-agent
+- Backend: @backend-agent
+
+## Decisions
+- Using JWT for tokens
+- Refresh token rotation every 7 days
+
+## Blocking Issues
+- None currently
+```
+
+### Message Passing (Slack)
+
+In Slack, agents can communicate via channels:
+
+```
+#engineering channel:
+@coder I've completed the API endpoints for auth
+
+#frontend channel:
+@frontend The auth API is ready. Here's the spec: [link]
+```
+
+### Task Dependencies
+
+Use cron or dispatch with dependencies:
+
+```bash
+# Research must complete before implementation
+klaw dispatch "Research OAuth providers" --agent researcher --id task-1
+
+# This waits for task-1
+klaw dispatch "Implement OAuth" --agent coder --depends-on task-1
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion icon="target" title="Define clear boundaries">
+    Each agent should have a specific, non-overlapping responsibility. Avoid agents that do "everything."
+  </Accordion>
+  <Accordion icon="message" title="Establish communication protocols">
+    Define how agents share information—workspace files, specific channels, or structured handoffs.
+  </Accordion>
+  <Accordion icon="check" title="Verify handoffs">
+    When one agent finishes, another should verify the output before continuing.
+  </Accordion>
+  <Accordion icon="gauge" title="Monitor and adjust">
+    Track which patterns work well. Some tasks may be better with fewer, more capable agents.
+  </Accordion>
+</AccordionGroup>
+
+## Example: Full Feature Development
+
+### 1. Create the Team
+
+```bash
+klaw create agent architect --skills code-exec --task "Design and planning"
+klaw create agent coder --skills code-exec,git --task "Implementation"
+klaw create agent tester --skills code-exec --task "Testing"
+klaw create agent reviewer --skills code-exec,git --task "Code review"
+```
+
+### 2. Configure Orchestrator
+
+```toml
+[orchestrator]
+mode = "hybrid"
+
+[[orchestrator.rules]]
+pattern = "(?i)(design|architecture|plan)"
+agent = "architect"
+
+[[orchestrator.rules]]
+pattern = "(?i)(implement|build|create|fix)"
+agent = "coder"
+
+[[orchestrator.rules]]
+pattern = "(?i)(test|coverage|qa)"
+agent = "tester"
+
+[[orchestrator.rules]]
+pattern = "(?i)(review|check|verify)"
+agent = "reviewer"
+```
+
+### 3. Execute the Workflow
+
+```
+User: We need a user registration feature
+
+@architect: I'll design the registration flow...
+[Creates design document]
+
+@coder: Implementing based on the design...
+[Creates registration code]
+
+@tester: Writing tests for registration...
+[Creates test suite]
+
+@reviewer: Reviewing the implementation...
+[Provides feedback]
+
+@coder: Addressing review feedback...
+[Updates code]
+
+Feature complete!
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Orchestrator"
+    icon="route"
+    href="/concepts/orchestrator"
+  >
+    Deep dive into routing
+  </Card>
+  <Card
+    title="Distributed Deployment"
+    icon="server"
+    href="/guides/distributed-deployment"
+  >
+    Scale multi-agent systems
+  </Card>
+</CardGroup>

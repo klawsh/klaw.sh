@@ -1,0 +1,424 @@
+---
+title: Tools
+description: 'The capabilities that make agents powerful'
+---
+
+## What are Tools?
+
+**Tools** are the actions agents can take to interact with the world. They're how agents read files, execute commands, search the web, and accomplish real tasks.
+
+When an agent receives a request, it decides which tools to use, calls them with appropriate parameters, receives the results, and uses that information to continue reasoning or respond to the user.
+
+## The Tool-Use Loop
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                     AGENT LOOP                            │
+│                                                          │
+│   User Input ──► LLM Decision ──► Tool Execution ──┐    │
+│        ▲                                           │    │
+│        │                                           │    │
+│        └──────── Result Processing ◄───────────────┘    │
+│                                                          │
+│                  (Repeat until task complete)            │
+└──────────────────────────────────────────────────────────┘
+```
+
+<Steps>
+  <Step title="Receive Input">
+    Agent receives a message from the user via a channel.
+  </Step>
+  <Step title="LLM Decision">
+    The LLM analyzes the request and decides which tool(s) to use.
+  </Step>
+  <Step title="Tool Execution">
+    klaw executes the tool with the provided parameters (2-minute timeout).
+  </Step>
+  <Step title="Result Processing">
+    Tool output is formatted and fed back to the LLM.
+  </Step>
+  <Step title="Continue or Respond">
+    LLM either calls more tools or generates a final response.
+  </Step>
+</Steps>
+
+## Built-in Tools
+
+klaw includes 11 powerful tools out of the box:
+
+### Command Execution
+
+<Card title="bash" icon="terminal">
+  Execute shell commands with full system access.
+
+  ```json
+  {
+    "tool": "bash",
+    "input": {
+      "command": "git status",
+      "timeout": 30000
+    }
+  }
+  ```
+
+  **Features:**
+  - 2-minute default timeout
+  - Working directory preservation
+  - Exit code and output capture
+  - Streaming output for long commands
+</Card>
+
+### File Operations
+
+<CardGroup cols={2}>
+  <Card title="read" icon="file">
+    Read file contents with line numbers.
+
+    ```json
+    {
+      "tool": "read",
+      "input": {
+        "path": "/src/main.go",
+        "offset": 0,
+        "limit": 100
+      }
+    }
+    ```
+  </Card>
+  <Card title="write" icon="file-pen">
+    Create or overwrite files.
+
+    ```json
+    {
+      "tool": "write",
+      "input": {
+        "path": "/src/new.go",
+        "content": "package main..."
+      }
+    }
+    ```
+  </Card>
+  <Card title="edit" icon="pen-to-square">
+    Precise string replacement in files.
+
+    ```json
+    {
+      "tool": "edit",
+      "input": {
+        "path": "/src/main.go",
+        "old_string": "func old()",
+        "new_string": "func new()"
+      }
+    }
+    ```
+  </Card>
+  <Card title="glob" icon="folder-tree">
+    Find files by pattern.
+
+    ```json
+    {
+      "tool": "glob",
+      "input": {
+        "pattern": "**/*.go",
+        "path": "/src"
+      }
+    }
+    ```
+  </Card>
+</CardGroup>
+
+### Search
+
+<CardGroup cols={2}>
+  <Card title="grep" icon="magnifying-glass">
+    Search file contents with regex.
+
+    ```json
+    {
+      "tool": "grep",
+      "input": {
+        "pattern": "func.*Error",
+        "path": "/src",
+        "type": "go"
+      }
+    }
+    ```
+  </Card>
+  <Card title="web_search" icon="globe">
+    Search the internet.
+
+    ```json
+    {
+      "tool": "web_search",
+      "input": {
+        "query": "golang context best practices"
+      }
+    }
+    ```
+  </Card>
+</CardGroup>
+
+### Web
+
+<Card title="web_fetch" icon="download">
+  Fetch and process web content.
+
+  ```json
+  {
+    "tool": "web_fetch",
+    "input": {
+      "url": "https://example.com/api/docs",
+      "prompt": "Extract the authentication methods"
+    }
+  }
+  ```
+
+  **Features:**
+  - HTML to markdown conversion
+  - AI-powered content extraction
+  - Redirect handling
+  - 15-minute cache
+</Card>
+
+### Agent Management
+
+<CardGroup cols={2}>
+  <Card title="agent_spawn" icon="robot">
+    Create specialized sub-agents.
+
+    ```json
+    {
+      "tool": "agent_spawn",
+      "input": {
+        "name": "researcher",
+        "task": "Find best practices for API design"
+      }
+    }
+    ```
+  </Card>
+  <Card title="skill" icon="puzzle-piece">
+    Install and manage skills.
+
+    ```json
+    {
+      "tool": "skill",
+      "input": {
+        "action": "install",
+        "name": "docker"
+      }
+    }
+    ```
+  </Card>
+</CardGroup>
+
+### Scheduling
+
+<Card title="cron" icon="clock">
+  Schedule recurring tasks.
+
+  ```json
+  {
+    "tool": "cron",
+    "input": {
+      "schedule": "0 9 * * *",
+      "task": "Check for security updates"
+    }
+  }
+  ```
+</Card>
+
+## Tool Schema
+
+Each tool defines a JSON schema for its parameters:
+
+```go
+type Tool interface {
+    // Name returns the tool identifier
+    Name() string
+
+    // Description explains what the tool does
+    Description() string
+
+    // Schema returns JSON schema for parameters
+    Schema() map[string]interface{}
+
+    // Execute runs the tool with given input
+    Execute(ctx context.Context, input map[string]interface{}) (string, error)
+}
+```
+
+### Example Schema (bash)
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "command": {
+      "type": "string",
+      "description": "The command to execute"
+    },
+    "timeout": {
+      "type": "integer",
+      "description": "Timeout in milliseconds",
+      "default": 120000
+    },
+    "workdir": {
+      "type": "string",
+      "description": "Working directory for command"
+    }
+  },
+  "required": ["command"]
+}
+```
+
+## Tool Execution Flow
+
+When an agent calls a tool:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Tool Call: bash                                             │
+│ ┌─────────────────────────────────────────────────────────┐ │
+│ │ $ git log --oneline -5                                  │ │
+│ └─────────────────────────────────────────────────────────┘ │
+├─────────────────────────────────────────────────────────────┤
+│ Result:                                                     │
+│ ┌─────────────────────────────────────────────────────────┐ │
+│ │ a1b2c3d Fix authentication bug                          │ │
+│ │ e4f5g6h Add user dashboard                              │ │
+│ │ i7j8k9l Update dependencies                             │ │
+│ │ m0n1o2p Initial commit                                  │ │
+│ └─────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Tool Permissions
+
+Control which tools agents can access:
+
+```toml
+# Agent with limited tools
+[agent.restricted]
+name = "restricted"
+tools = ["read", "glob", "grep"]  # Read-only access
+```
+
+### Permission Levels
+
+| Level | Tools | Use Case |
+|-------|-------|----------|
+| Read-only | read, glob, grep | Code review, analysis |
+| File ops | + write, edit | Development |
+| Full | + bash, web | Automation, devops |
+| Admin | + agent_spawn, skill | Agent management |
+
+## Custom Tools
+
+Create custom tools by implementing the Tool interface:
+
+```go
+package tools
+
+type MyCustomTool struct{}
+
+func (t *MyCustomTool) Name() string {
+    return "my_tool"
+}
+
+func (t *MyCustomTool) Description() string {
+    return "Does something custom"
+}
+
+func (t *MyCustomTool) Schema() map[string]interface{} {
+    return map[string]interface{}{
+        "type": "object",
+        "properties": map[string]interface{}{
+            "input": map[string]interface{}{
+                "type":        "string",
+                "description": "The input to process",
+            },
+        },
+        "required": []string{"input"},
+    }
+}
+
+func (t *MyCustomTool) Execute(ctx context.Context, input map[string]interface{}) (string, error) {
+    // Your logic here
+    return "Result", nil
+}
+```
+
+Register the tool:
+
+```go
+registry := tool.NewRegistry()
+registry.Register(&MyCustomTool{})
+```
+
+## Tool Output Formatting
+
+Tool results are formatted for LLM consumption:
+
+```
+╭──────────────────────────────────────────╮
+│ Tool: bash                               │
+│ Command: ls -la /src                     │
+├──────────────────────────────────────────┤
+│ total 32                                 │
+│ drwxr-xr-x  5 user  staff  160 Dec 14    │
+│ -rw-r--r--  1 user  staff  1234 Dec 14   │
+│ ...                                      │
+╰──────────────────────────────────────────╯
+```
+
+## Timeouts and Limits
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Tool timeout | 2 minutes | Max execution time per tool |
+| Output limit | 30,000 chars | Truncation threshold |
+| Concurrent tools | 1 | Tools execute sequentially |
+
+Override in config:
+
+```toml
+[tools]
+timeout = 300000  # 5 minutes
+output_limit = 50000
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion icon="shield" title="Minimize bash access">
+    Only grant bash access when truly needed. Use specific file tools when possible.
+  </Accordion>
+  <Accordion icon="clock" title="Set appropriate timeouts">
+    Long-running commands should have explicit timeouts to prevent hanging.
+  </Accordion>
+  <Accordion icon="folder" title="Use working directories">
+    Set workdir to limit file operations to specific directories.
+  </Accordion>
+  <Accordion icon="eye" title="Review tool outputs">
+    Tool outputs are visible in the conversation. Sensitive data may be exposed.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Skills"
+    icon="puzzle-piece"
+    href="/concepts/skills"
+  >
+    Compose tools into capability bundles
+  </Card>
+  <Card
+    title="Custom Tools Guide"
+    icon="wrench"
+    href="/guides/custom-tools"
+  >
+    Build your own tools
+  </Card>
+</CardGroup>

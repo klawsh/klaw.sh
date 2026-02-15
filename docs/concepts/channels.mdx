@@ -1,0 +1,364 @@
+---
+title: Channels
+description: 'How agents receive and respond to messages'
+---
+
+## What are Channels?
+
+**Channels** are the communication surfaces through which agents receive work and send responses. They abstract away the specifics of different messaging systems, allowing the same agent to work across CLI, Slack, Discord, and more.
+
+In Kubernetes terms, channels are like Services—they define how work reaches your agents.
+
+## Channel Architecture
+
+```
+┌──────────────────────────────────────────────────────┐
+│                    CHANNELS                           │
+├──────────┬──────────┬──────────┬──────────┬─────────┤
+│   CLI    │  Slack   │ Discord  │ Telegram │   API   │
+└────┬─────┴────┬─────┴────┬─────┴────┬─────┴────┬────┘
+     │          │          │          │          │
+     └──────────┴──────────┼──────────┴──────────┘
+                           │
+                           ▼
+               ┌───────────────────────┐
+               │     ORCHESTRATOR      │
+               └───────────┬───────────┘
+                           │
+                           ▼
+               ┌───────────────────────┐
+               │        AGENT          │
+               └───────────────────────┘
+```
+
+## Supported Channels
+
+<CardGroup cols={2}>
+  <Card title="Terminal" icon="terminal">
+    Interactive command-line interface with styled output
+    ```bash
+    klaw chat
+    ```
+  </Card>
+  <Card title="TUI" icon="rectangle-terminal">
+    Beautiful terminal UI with Bubble Tea
+    ```bash
+    klaw chat --tui
+    ```
+  </Card>
+  <Card title="Slack" icon="slack">
+    Full Slack integration with thread support
+    ```bash
+    klaw slack
+    ```
+  </Card>
+  <Card title="API" icon="code">
+    REST API for programmatic access
+    ```bash
+    klaw api --port 8080
+    ```
+  </Card>
+</CardGroup>
+
+## Channel Interface
+
+All channels implement a common interface:
+
+```go
+type Channel interface {
+    // Start initializes the channel
+    Start(ctx context.Context) error
+
+    // Send delivers a message to the user
+    Send(ctx context.Context, msg Message) error
+
+    // Receive waits for and returns user input
+    Receive(ctx context.Context) (Message, error)
+
+    // Stop gracefully shuts down the channel
+    Stop() error
+
+    // Name returns the channel identifier
+    Name() string
+}
+```
+
+## Message Structure
+
+Messages flow bidirectionally through channels:
+
+```go
+type Message struct {
+    // Content is the message text
+    Content string
+
+    // Role is "user" or "assistant"
+    Role string
+
+    // Partial indicates streaming (not complete)
+    Partial bool
+
+    // Done indicates the message is complete
+    Done bool
+
+    // Metadata contains channel-specific data
+    Metadata map[string]string
+}
+```
+
+### Metadata Examples
+
+Different channels attach different metadata:
+
+<Tabs>
+  <Tab title="Slack">
+    ```json
+    {
+      "channel": "C0123456789",
+      "thread_ts": "1234567890.123456",
+      "user_id": "U0123456789",
+      "team_id": "T0123456789"
+    }
+    ```
+  </Tab>
+  <Tab title="CLI">
+    ```json
+    {
+      "session_id": "abc123",
+      "workdir": "/home/user/project"
+    }
+    ```
+  </Tab>
+  <Tab title="API">
+    ```json
+    {
+      "request_id": "req_abc123",
+      "client_ip": "192.168.1.1"
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Terminal Channel
+
+The default interactive experience:
+
+```bash
+klaw chat
+```
+
+Features:
+- Styled output with colors and formatting
+- Real-time streaming of responses
+- Tool execution visualization with box drawing
+- Command history
+- Multi-line input support
+
+### Simple Mode
+
+For basic terminals without advanced features:
+
+```bash
+klaw chat --simple
+```
+
+## TUI Channel
+
+Rich terminal UI built with Bubble Tea:
+
+```bash
+klaw chat --tui
+```
+
+Features:
+- Syntax highlighting for code
+- Scrollable message history
+- Progress indicators
+- Keyboard shortcuts
+- Split-pane view
+
+## Slack Channel
+
+Full-featured Slack bot integration:
+
+```bash
+klaw slack
+```
+
+### Setup Requirements
+
+1. Create a Slack app at [api.slack.com](https://api.slack.com)
+2. Enable Socket Mode
+3. Add bot scopes: `chat:write`, `app_mentions:read`, `channels:history`
+4. Install to workspace
+5. Set environment variables:
+
+```bash
+export SLACK_BOT_TOKEN=xoxb-...
+export SLACK_APP_TOKEN=xapp-...
+```
+
+### Thread Support
+
+klaw automatically handles Slack threads:
+
+- Messages in threads get their own conversation context
+- Main channel messages start new conversations
+- `@mention` the bot to engage it
+
+### Example Interaction
+
+```
+User: @klaw help me debug this error
+klaw: I'll help you debug that. Can you share the error message?
+User: [shares error in thread]
+klaw: [responds in same thread with context preserved]
+```
+
+## API Channel
+
+REST API for programmatic access:
+
+```bash
+klaw api --port 8080
+```
+
+### Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/v1/chat` | Send a message and get response |
+| POST | `/v1/chat/stream` | Stream response with SSE |
+| GET | `/v1/agents` | List available agents |
+| GET | `/v1/health` | Health check |
+
+### Example Request
+
+```bash
+curl -X POST http://localhost:8080/v1/chat \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $API_KEY" \
+  -d '{
+    "message": "Explain this codebase",
+    "agent": "coder"
+  }'
+```
+
+### Streaming Response
+
+```bash
+curl -X POST http://localhost:8080/v1/chat/stream \
+  -H "Content-Type: application/json" \
+  -H "Accept: text/event-stream" \
+  -d '{"message": "Write a hello world in Go"}'
+```
+
+Response (SSE):
+```
+data: {"type": "text", "content": "Here's"}
+data: {"type": "text", "content": " a simple"}
+data: {"type": "tool", "name": "write", "status": "running"}
+data: {"type": "tool", "name": "write", "status": "done"}
+data: {"type": "done"}
+```
+
+## Channel Bindings
+
+Connect channels to namespaces in distributed mode:
+
+```yaml
+# channel-binding.yaml
+apiVersion: klaw.sh/v1
+kind: ChannelBinding
+metadata:
+  name: slack-engineering
+  namespace: engineering
+spec:
+  channel: slack
+  config:
+    allowed_channels:
+      - C0123456789  # #engineering
+      - C9876543210  # #deployments
+    default_agent: coder
+```
+
+Apply with:
+
+```bash
+klaw apply -f channel-binding.yaml
+```
+
+## Streaming
+
+All channels support real-time streaming:
+
+```
+┌─────────────────────────────────────────────────────┐
+│ User Input                                          │
+│ > Explain quantum computing                         │
+├─────────────────────────────────────────────────────┤
+│ Agent Response (streaming)                          │
+│                                                     │
+│ Quantum computing is a type of computation that█   │
+│                                    ↑                │
+│                              cursor (typing)        │
+└─────────────────────────────────────────────────────┘
+```
+
+## Custom Channels
+
+Implement the Channel interface to add custom channels:
+
+```go
+type DiscordChannel struct {
+    session *discordgo.Session
+}
+
+func (c *DiscordChannel) Start(ctx context.Context) error {
+    // Initialize Discord connection
+}
+
+func (c *DiscordChannel) Send(ctx context.Context, msg Message) error {
+    // Send message to Discord
+}
+
+func (c *DiscordChannel) Receive(ctx context.Context) (Message, error) {
+    // Wait for Discord message
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion icon="thread" title="Use thread-aware conversations">
+    In Slack and similar platforms, leverage threading to maintain separate conversation contexts.
+  </Accordion>
+  <Accordion icon="stream" title="Enable streaming for better UX">
+    Streaming responses show progress and reduce perceived latency.
+  </Accordion>
+  <Accordion icon="lock" title="Secure API channels">
+    Always use authentication for API channels in production.
+  </Accordion>
+  <Accordion icon="filter" title="Filter channels appropriately">
+    In Slack, limit bot access to specific channels to prevent noise.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Orchestrator"
+    icon="route"
+    href="/concepts/orchestrator"
+  >
+    Learn how messages are routed to agents
+  </Card>
+  <Card
+    title="Slack Integration"
+    icon="slack"
+    href="/guides/slack-integration"
+  >
+    Complete Slack setup guide
+  </Card>
+</CardGroup>

@@ -1,0 +1,247 @@
+---
+title: Installation
+description: 'Detailed installation instructions for all platforms'
+---
+
+## System Requirements
+
+- **OS**: macOS, Linux, or Windows (WSL2 recommended)
+- **Architecture**: amd64 or arm64
+- **Memory**: 256MB minimum, 1GB recommended
+- **Disk**: 50MB for binary, plus workspace storage
+
+## Installation Methods
+
+### One-Line Install (Recommended)
+
+The fastest way to install klaw:
+
+```bash
+curl -fsSL https://klaw.sh/install.sh | sh
+```
+
+This script:
+- Detects your OS and architecture
+- Downloads the appropriate binary
+- Installs to `/usr/local/bin/klaw`
+- Verifies the checksum
+
+<Note>
+  You may need to use `sudo` if `/usr/local/bin` requires elevated permissions.
+</Note>
+
+### Manual Download
+
+Download the appropriate binary for your platform:
+
+<Tabs>
+  <Tab title="macOS (Apple Silicon)">
+    ```bash
+    curl -L https://github.com/klawsh/klaw.sh/releases/latest/download/klaw-darwin-arm64.tar.gz | tar xz
+    sudo mv klaw /usr/local/bin/
+    ```
+  </Tab>
+  <Tab title="macOS (Intel)">
+    ```bash
+    curl -L https://github.com/klawsh/klaw.sh/releases/latest/download/klaw-darwin-amd64.tar.gz | tar xz
+    sudo mv klaw /usr/local/bin/
+    ```
+  </Tab>
+  <Tab title="Linux (x64)">
+    ```bash
+    curl -L https://github.com/klawsh/klaw.sh/releases/latest/download/klaw-linux-amd64.tar.gz | tar xz
+    sudo mv klaw /usr/local/bin/
+    ```
+  </Tab>
+  <Tab title="Linux (ARM64)">
+    ```bash
+    curl -L https://github.com/klawsh/klaw.sh/releases/latest/download/klaw-linux-arm64.tar.gz | tar xz
+    sudo mv klaw /usr/local/bin/
+    ```
+  </Tab>
+  <Tab title="Windows">
+    ```powershell
+    # Download from GitHub releases
+    Invoke-WebRequest -Uri "https://github.com/klawsh/klaw.sh/releases/latest/download/klaw-windows-amd64.zip" -OutFile "klaw.zip"
+    Expand-Archive -Path "klaw.zip" -DestinationPath "C:\Program Files\klaw"
+
+    # Add to PATH
+    $env:PATH += ";C:\Program Files\klaw"
+    ```
+
+    <Warning>
+      Windows native support is experimental. WSL2 is recommended for production use.
+    </Warning>
+  </Tab>
+</Tabs>
+
+### Build from Source
+
+Requires Go 1.24 or later:
+
+```bash
+# Clone the repository
+git clone https://github.com/klawsh/klaw.sh.git
+cd klaw
+
+# Build the binary
+make build
+
+# Install to PATH
+sudo mv bin/klaw /usr/local/bin/
+
+# Or install directly to GOPATH/bin
+make install
+```
+
+## Verify Installation
+
+Check that klaw is installed correctly:
+
+```bash
+klaw version
+```
+
+Expected output:
+
+```
+klaw version 1.0.0
+go version: go1.24.2
+platform: darwin/arm64
+```
+
+## Initial Configuration
+
+After installation, klaw needs at least one LLM provider configured:
+
+### Option 1: Environment Variables
+
+```bash
+# Add to your shell profile (~/.bashrc, ~/.zshrc, etc.)
+
+# each::labs Router (300+ models)
+export EACHLABS_API_KEY=your-key
+
+# Or Anthropic directly
+export ANTHROPIC_API_KEY=sk-ant-...
+
+# Or OpenRouter
+export OPENROUTER_API_KEY=sk-or-...
+```
+
+### Option 2: Configuration File
+
+Create `~/.klaw/config.toml`:
+
+```toml
+[defaults]
+model = "claude-sonnet-4-20250514"
+
+[provider.anthropic]
+api_key = "sk-ant-..."
+```
+
+<Tip>
+  Use environment variable references in config files for security:
+  ```toml
+  [provider.anthropic]
+  api_key = "${ANTHROPIC_API_KEY}"
+  ```
+</Tip>
+
+## Shell Completions
+
+Enable tab completion for your shell:
+
+<Tabs>
+  <Tab title="Bash">
+    ```bash
+    # Add to ~/.bashrc
+    eval "$(klaw completion bash)"
+    ```
+  </Tab>
+  <Tab title="Zsh">
+    ```bash
+    # Add to ~/.zshrc
+    eval "$(klaw completion zsh)"
+    ```
+  </Tab>
+  <Tab title="Fish">
+    ```bash
+    klaw completion fish | source
+    ```
+  </Tab>
+  <Tab title="PowerShell">
+    ```powershell
+    klaw completion powershell | Out-String | Invoke-Expression
+    ```
+  </Tab>
+</Tabs>
+
+## Uninstallation
+
+```bash
+sudo rm /usr/local/bin/klaw
+rm -rf ~/.klaw  # Remove configuration and data
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion icon="triangle-exclamation" title="Permission denied">
+    If you get a permission error when installing:
+    ```bash
+    sudo curl -fsSL https://klaw.sh/install.sh | sudo sh
+    ```
+    Or install to a user directory:
+    ```bash
+    mkdir -p ~/bin
+    curl -fsSL https://klaw.sh/install.sh | sh -s -- --prefix ~/bin
+    export PATH="$HOME/bin:$PATH"
+    ```
+  </Accordion>
+  <Accordion icon="triangle-exclamation" title="Command not found">
+    Ensure the installation directory is in your PATH:
+    ```bash
+    echo $PATH
+    # Should include /usr/local/bin
+
+    # If not, add it:
+    export PATH="/usr/local/bin:$PATH"
+    ```
+  </Accordion>
+  <Accordion icon="triangle-exclamation" title="macOS Gatekeeper warning">
+    If macOS prevents running klaw:
+    ```bash
+    # Allow the binary
+    xattr -d com.apple.quarantine /usr/local/bin/klaw
+    ```
+    Or go to System Preferences → Security & Privacy → Allow.
+  </Accordion>
+  <Accordion icon="triangle-exclamation" title="Go version too old">
+    When building from source, ensure you have Go 1.24+:
+    ```bash
+    go version
+    # Should show go1.24.x or later
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Quick Start"
+    icon="rocket"
+    href="/quickstart"
+  >
+    Start using klaw immediately
+  </Card>
+  <Card
+    title="Configuration"
+    icon="gear"
+    href="/configuration/overview"
+  >
+    Configure providers, channels, and more
+  </Card>
+</CardGroup>
