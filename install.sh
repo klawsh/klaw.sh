@@ -52,7 +52,7 @@ detect_arch() {
 get_latest_version() {
     curl -sL "https://api.github.com/repos/${GITHUB_REPO}/releases/latest" | \
         grep '"tag_name":' | \
-        sed -E 's/.*"([^"]+)".*/\1/' || echo "v0.2.0"
+        sed -E 's/.*"([^"]+)".*/\1/' || echo "2026.02.16.0"
 }
 
 # Main install
