@@ -3,19 +3,14 @@ title: Quick Start
 description: 'Get up and running with klaw in under 5 minutes'
 ---
 
-## Prerequisites
-
-- A terminal (macOS, Linux, or Windows WSL)
-- An API key from one of the supported providers
-
-## Step 1: Install klaw
+## Install klaw
 
 <Tabs>
   <Tab title="curl (Recommended)">
     ```bash
     curl -fsSL https://klaw.sh/install.sh | sh
     ```
-    This installs the latest version to `/usr/local/bin/klaw`.
+    Installs to `/usr/local/bin/klaw`.
   </Tab>
   <Tab title="Build from Source">
     ```bash
@@ -27,166 +22,202 @@ description: 'Get up and running with klaw in under 5 minutes'
   </Tab>
 </Tabs>
 
-Verify the installation:
+Verify:
 
 ```bash
 klaw version
+# klaw v1.0.0 (darwin/arm64)
 ```
 
-## Step 2: Configure Your Provider
-
-klaw supports multiple LLM providers. Choose one and set your API key:
+## Configure Your Provider
 
 <Tabs>
-  <Tab title="each::labs Router (Recommended)">
+  <Tab title="each::labs (Recommended)">
     Access 300+ models through a single API key:
     ```bash
     export EACHLABS_API_KEY=your-api-key
     ```
-    Get your API key at [eachlabs.ai](https://eachlabs.ai)
+    Get your key at [eachlabs.ai](https://eachlabs.ai)
   </Tab>
   <Tab title="Anthropic">
-    Direct access to Claude models:
+    Direct Claude access:
     ```bash
     export ANTHROPIC_API_KEY=sk-ant-...
     ```
-    Get your API key at [console.anthropic.com](https://console.anthropic.com)
   </Tab>
   <Tab title="OpenRouter">
     Multi-provider gateway:
     ```bash
     export OPENROUTER_API_KEY=sk-or-...
     ```
-    Get your API key at [openrouter.ai](https://openrouter.ai)
   </Tab>
 </Tabs>
 
-## Step 3: Start Chatting
+## Start Chatting
 
 ```bash
 klaw chat
 ```
 
-You'll see an interactive prompt where you can start conversing with the AI agent:
+You'll see:
 
 ```
-klaw v1.0.0 - The Kubernetes for AI Agents
-Using model: claude-sonnet-4-20250514
+klaw v1.0.0 — kubectl for AI Agents
+Model: claude-sonnet-4-20250514
 
-> Hello! Can you help me understand this codebase?
+> Hello! Help me understand this codebase.
 
-I'll help you explore this codebase. Let me start by looking at the
-project structure...
+I'll explore the codebase for you...
 
-[Tool: glob] Finding files...
+[tool: glob] Finding files...
 ├── cmd/
 ├── internal/
 ├── go.mod
 └── README.md
 
-This appears to be a Go project. Let me read the main files to give
-you a better overview...
+This is a Go project. Let me read the main files...
 ```
 
-## Step 4: Try Some Commands
+## Create Your First Agent
 
-### Interactive Chat with TUI
-
-For a richer experience with syntax highlighting and better formatting:
+### 1. Create a namespace
 
 ```bash
-klaw chat --tui
+klaw create namespace sales
 ```
 
-### One-shot Task
-
-Execute a single task and exit:
+### 2. Create an agent
 
 ```bash
-klaw dispatch "Explain what this project does"
+klaw create agent lead-scorer \
+  --namespace sales \
+  --model claude-sonnet-4-20250514 \
+  --skills crm,web-search
 ```
 
-### Specify a Model
-
-Use a specific model:
+### 3. Check your agents
 
 ```bash
-klaw chat --model claude-sonnet-4-20250514
-klaw chat --model gpt-4o
+$ klaw get agents
+
+NAME          NAMESPACE   STATUS   MODEL              LAST RUN
+lead-scorer   sales       idle     claude-sonnet-4    never
 ```
 
-### Start Full Platform
+### 4. Run the agent
 
-Run the full platform with Slack integration and scheduler:
+```bash
+klaw dispatch "Analyze the lead john@acme.com and score their fit" \
+  --agent lead-scorer
+```
+
+### 5. View logs
+
+```bash
+klaw logs lead-scorer --follow
+```
+
+## Schedule Recurring Tasks
+
+```bash
+# Run every hour
+klaw cron create score-leads \
+  --schedule "0 * * * *" \
+  --agent lead-scorer \
+  --task "Check HubSpot for new leads, score them 1-100, update Lead Score field"
+
+# View scheduled jobs
+klaw cron list
+
+# Disable when needed
+klaw cron disable score-leads
+```
+
+## Add Slack Control
+
+### 1. Set up Slack tokens
 
 ```bash
 export SLACK_BOT_TOKEN=xoxb-...
 export SLACK_APP_TOKEN=xapp-...
+```
+
+### 2. Start the platform
+
+```bash
 klaw start
+```
+
+### 3. Control from Slack
+
+```
+@klaw status                    # List all agents
+@klaw run lead-scorer           # Trigger agent
+@klaw logs lead-scorer          # View logs
+@klaw "score john@bigco.com"    # Quick task
 ```
 
 ## What's Next?
 
 <CardGroup cols={2}>
   <Card
-    title="Understand Agents"
+    title="Agents"
     icon="robot"
     href="/concepts/agents"
   >
-    Learn how agents work and how to configure them
+    Learn how agents work
   </Card>
   <Card
-    title="Explore Tools"
-    icon="wrench"
-    href="/concepts/tools"
+    title="Namespaces"
+    icon="shield"
+    href="/concepts/namespaces"
   >
-    Discover the built-in tools agents can use
+    Isolate agents by team
   </Card>
   <Card
     title="Slack Integration"
     icon="slack"
     href="/guides/slack-integration"
   >
-    Deploy your agent to Slack
+    Full Slack setup guide
   </Card>
   <Card
     title="Distributed Mode"
     icon="server"
     href="/guides/distributed-deployment"
   >
-    Scale across multiple machines
+    Scale across multiple nodes
   </Card>
 </CardGroup>
 
 ## Example Use Cases
 
 <AccordionGroup>
-  <Accordion icon="code" title="Code Assistant">
+  <Accordion icon="chart-line" title="Lead Scoring">
     ```bash
-    > Fix the bug in src/api/handler.go where users can't authenticate
-
-    # Agent reads the file, identifies the issue, and fixes it
+    klaw create agent lead-scorer --namespace sales --skills crm,web-search
+    klaw cron create hourly-scoring --schedule "0 * * * *" --agent lead-scorer \
+      --task "Score new HubSpot leads 1-100 based on company size and fit"
     ```
   </Accordion>
-  <Accordion icon="magnifying-glass" title="Research Assistant">
+  <Accordion icon="eye" title="Competitor Monitoring">
     ```bash
-    > Research the latest developments in WebAssembly and summarize them
-
-    # Agent searches the web, reads multiple sources, and provides a summary
+    klaw create agent competitor-watch --namespace research --skills web-fetch,slack
+    klaw cron create daily-check --schedule "0 9 * * *" --agent competitor-watch \
+      --task "Check competitor.com/pricing for changes, post diff to #competitive-intel"
     ```
   </Accordion>
-  <Accordion icon="file-lines" title="Documentation Generator">
+  <Accordion icon="headset" title="Support Automation">
     ```bash
-    > Generate API documentation for all the handlers in internal/api/
-
-    # Agent reads the code and generates comprehensive documentation
+    klaw create agent ticket-handler --namespace support --skills zendesk,slack
+    # Agent responds to @klaw mentions in Slack support channels
     ```
   </Accordion>
-  <Accordion icon="terminal" title="DevOps Automation">
+  <Accordion icon="file-chart-line" title="Automated Reports">
     ```bash
-    > Check the status of all Docker containers and restart any that are unhealthy
-
-    # Agent runs docker commands, analyzes output, and takes action
+    klaw create agent reporter --namespace analytics --skills sql,charts,slack
+    klaw cron create weekly-report --schedule "0 8 * * MON" --agent reporter \
+      --task "Query last week's metrics, generate charts, post to #team-updates"
     ```
   </Accordion>
 </AccordionGroup>

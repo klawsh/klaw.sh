@@ -7,43 +7,123 @@ description: 'Frequently asked questions about klaw'
 
 <AccordionGroup>
   <Accordion icon="circle-question" title="What is klaw?">
-    klaw is an open-source platform for deploying and managing AI agents at scale. It brings Kubernetes-style orchestration to AI agents—same familiar patterns, but for intelligent agents instead of containers.
+    klaw is enterprise AI agent orchestration — like kubectl, but for AI agents.
+
+    ```bash
+    klaw get agents          # List all agents
+    klaw describe agent      # Inspect an agent
+    klaw logs agent          # View logs
+    klaw cron create         # Schedule tasks
+    ```
+
+    If you know kubectl, you already know klaw.
   </Accordion>
 
-  <Accordion icon="circle-question" title="Why is it called klaw?">
-    "klaw" represents the tool that lets you grab and control AI agents, similar to how kubectl lets you control Kubernetes. It's also a nod to the Kubernetes ecosystem (k8s, k3s, etc.).
+  <Accordion icon="circle-question" title="Why 'kubectl for AI Agents'?">
+    Because the operational challenges are identical:
+
+    | Challenge | Kubernetes | klaw |
+    |-----------|------------|------|
+    | Where does my workload run? | Scheduler → Nodes | Dispatcher → Nodes |
+    | How do I isolate workloads? | Namespaces | Namespaces |
+    | How do I configure them? | ConfigMaps/Secrets | Config/Secrets |
+    | How do I monitor them? | `kubectl logs` | `klaw logs` |
+    | How do I schedule work? | CronJob | `klaw cron` |
+
+    Kubernetes solved this for containers. klaw solves it for AI agents.
   </Accordion>
 
-  <Accordion icon="circle-question" title="How is klaw different from LangChain or CrewAI?">
-    - **Single binary**: No Python setup, no dependencies
-    - **Distributed by design**: Built-in controller-node architecture
-    - **Multi-channel**: Native Slack integration, not just CLI
-    - **Production-ready**: Namespaces, RBAC, observability built-in
-    - **300+ models**: Any LLM through unified API
+  <Accordion icon="circle-question" title="Who is klaw for?">
+    Enterprises running AI agents in production. If you have multiple agents doing different jobs (lead scoring, competitor monitoring, support automation, report generation) and need:
+    - Visibility into what agents are doing
+    - Isolation between teams
+    - Scheduling and automation
+    - Easy scaling
+
+    klaw is for you.
   </Accordion>
 
   <Accordion icon="circle-question" title="Is klaw production-ready?">
-    klaw is currently in public alpha. It's being used in production by early adopters, but expect some rough edges and breaking changes before 1.0.
+    klaw is in public beta. It's being used in production by early adopters. Expect some rough edges before 1.0.
   </Accordion>
 </AccordionGroup>
 
-## Installation & Setup
+## Comparison
 
 <AccordionGroup>
-  <Accordion icon="circle-question" title="What are the system requirements?">
-    - **OS**: macOS, Linux, or Windows (WSL2)
-    - **Architecture**: amd64 or arm64
-    - **Memory**: 256MB minimum, 1GB recommended
-    - **Disk**: 50MB for binary
-    - **Network**: Outbound HTTPS access
+  <Accordion icon="circle-question" title="How is klaw different from OpenClaw?">
+    OpenClaw is powerful but complex:
+    - Node.js + multiple services
+    - Difficult deployment
+    - Hard to scale
+
+    klaw is a single Go binary with:
+    - Same agent capabilities
+    - kubectl-style operations
+    - Deploy in seconds
+    - Scale by adding nodes
+
+    Think of klaw as "OpenClaw, but simple."
   </Accordion>
 
-  <Accordion icon="circle-question" title="Which LLM providers are supported?">
-    - **Anthropic** (Claude): Direct API access
-    - **OpenRouter**: 100+ models through gateway
-    - **each::labs**: 300+ models unified API
+  <Accordion icon="circle-question" title="How is klaw different from LangChain/CrewAI?">
+    Those are **frameworks for building agents** — they help you chain LLM calls together.
 
-    More providers coming soon.
+    klaw is **infrastructure for operating agents** — it helps you deploy, schedule, monitor, and scale those agents in production.
+
+    You could build agents with LangChain and deploy them on klaw.
+  </Accordion>
+
+  <Accordion icon="circle-question" title="How is klaw different from Google ADK?">
+    ADK provides abstractions for building agents. klaw provides the runtime and control plane for running them. Different layers of the stack.
+  </Accordion>
+
+  <Accordion icon="circle-question" title="How is klaw different from Claude Code?">
+    Claude Code is a single-user interactive coding assistant.
+
+    klaw is multi-agent orchestration for enterprises — multiple agents, multiple teams, namespaces, scheduling, Slack control, distributed mode.
+  </Accordion>
+</AccordionGroup>
+
+## Technical
+
+<AccordionGroup>
+  <Accordion icon="circle-question" title="What LLM providers are supported?">
+    300+ models via:
+    - **each::labs Router** — single API for all models
+    - **OpenRouter** — multi-provider gateway
+    - **Direct providers** — Anthropic, OpenAI, Google, Azure
+    - **Local models** — Ollama, any OpenAI-compatible endpoint
+  </Accordion>
+
+  <Accordion icon="circle-question" title="Is this about sandboxing agents?">
+    Yes. Agents run in namespaces with:
+    - **Scoped secrets** — sales can't access support's API keys
+    - **Tool permissions** — agents only get the tools you allow
+    - **Resource isolation** — each namespace is independent
+
+    For stronger isolation, run agents in Podman containers.
+  </Accordion>
+
+  <Accordion icon="circle-question" title="Can I run klaw on-prem?">
+    Yes. Single binary, no external dependencies. Run on your servers, your VPC, air-gapped environments. You control everything.
+  </Accordion>
+
+  <Accordion icon="circle-question" title="How does distributed mode work?">
+    1. Start a controller on one machine
+    2. Worker nodes join the cluster
+    3. Tasks are automatically dispatched to available nodes
+
+    ```bash
+    # Controller
+    klaw controller start --port 9090
+
+    # Workers
+    klaw node join controller:9090 --token $TOKEN
+
+    # Dispatch
+    klaw dispatch "analyze leads" --agent lead-scorer
+    ```
   </Accordion>
 
   <Accordion icon="circle-question" title="Do I need Docker or Kubernetes?">
@@ -59,12 +139,18 @@ description: 'Frequently asked questions about klaw'
     - `klaw start`: Full platform with Slack integration, cron scheduler, and multi-user support
   </Accordion>
 
-  <Accordion icon="circle-question" title="Can I use multiple agents?">
-    Yes. Create multiple agents with different configurations, skills, and purposes. Use the orchestrator to route messages to the right agent automatically.
-  </Accordion>
+  <Accordion icon="circle-question" title="How do I control agents from Slack?">
+    1. Set up Slack bot and app tokens
+    2. Run `klaw start`
+    3. Use `@klaw` in Slack
 
-  <Accordion icon="circle-question" title="How do agents communicate with each other?">
-    Agents can spawn sub-agents using the `agent_spawn` tool, share context through workspace files, or communicate via Slack channels in team deployments.
+    ```
+    @klaw status              # List agents
+    @klaw run lead-scorer     # Trigger agent
+    @klaw logs ticket-handler # View logs
+    ```
+
+    See [Slack Integration Guide](/guides/slack-integration) for full setup.
   </Accordion>
 
   <Accordion icon="circle-question" title="Can I schedule recurring tasks?">
@@ -76,27 +162,35 @@ description: 'Frequently asked questions about klaw'
       --task "Generate daily status report"
     ```
   </Accordion>
+
+  <Accordion icon="circle-question" title="How do agents communicate with each other?">
+    Agents can spawn sub-agents using the `agent_spawn` tool, share context through workspace files, or communicate via Slack channels in team deployments.
+  </Accordion>
 </AccordionGroup>
 
 ## Deployment
 
 <AccordionGroup>
+  <Accordion icon="circle-question" title="What are the system requirements?">
+    - Any 64-bit Linux, macOS, or Windows
+    - ~20MB disk space for the binary
+    - Internet access for LLM API calls (unless using local models)
+
+    That's it. No runtime dependencies.
+  </Accordion>
+
+  <Accordion icon="circle-question" title="How do I update klaw?">
+    ```bash
+    curl -fsSL https://klaw.sh/install.sh | sh
+    ```
+    The installer always gets the latest version.
+  </Accordion>
+
   <Accordion icon="circle-question" title="Can I run klaw in containers?">
     Yes. klaw supports running agents in isolated Podman containers:
     ```bash
     klaw build
     klaw run myagent --task "..."
-    ```
-  </Accordion>
-
-  <Accordion icon="circle-question" title="How do I scale to multiple machines?">
-    Use distributed mode:
-    ```bash
-    # On controller
-    klaw controller start --port 9090
-
-    # On workers
-    klaw node join controller:9090 --token xxx
     ```
   </Accordion>
 
@@ -121,14 +215,21 @@ description: 'Frequently asked questions about klaw'
     - Execute bash commands
     - Make web requests
 
-    Limit access by restricting tools and using container mode.
+    Limit access by restricting tools per namespace and using container mode.
   </Accordion>
 
   <Accordion icon="circle-question" title="How do I restrict agent permissions?">
-    1. Limit tools when creating agents
-    2. Set a specific working directory
-    3. Use container mode for isolation
-    4. Configure orchestrator rules for routing
+    Configure namespaces in `~/.klaw/config.toml`:
+
+    ```toml
+    [namespace.sales]
+    secrets = ["HUBSPOT_KEY"]
+    allowed_tools = ["hubspot", "web_search"]
+
+    [namespace.support]
+    secrets = ["ZENDESK_KEY"]
+    allowed_tools = ["zendesk", "slack"]
+    ```
   </Accordion>
 </AccordionGroup>
 
@@ -136,23 +237,20 @@ description: 'Frequently asked questions about klaw'
 
 <AccordionGroup>
   <Accordion icon="circle-question" title="Is klaw open source?">
-    klaw is source-available under the each::labs License. The code is open, but there are some restrictions on commercial SaaS use.
-  </Accordion>
+    klaw is source-available under the each::labs License.
 
-  <Accordion icon="circle-question" title="Can I use klaw for free?">
-    Yes, klaw is free for:
+    **Free** for:
     - Internal business use
     - Personal projects
-    - Building your own AI applications
     - Consulting and professional services
+
+    **License required** for:
+    - Multi-tenant SaaS offerings
+    - White-label/OEM distribution
   </Accordion>
 
-  <Accordion icon="circle-question" title="When do I need a commercial license?">
-    You need a license for:
-    - Multi-tenant SaaS offerings using klaw
-    - White-label or OEM distribution
-
-    Contact enterprise@eachlabs.ai for licensing.
+  <Accordion icon="circle-question" title="How do I get an enterprise license?">
+    Contact enterprise@eachlabs.ai
   </Accordion>
 </AccordionGroup>
 
@@ -160,7 +258,7 @@ description: 'Frequently asked questions about klaw'
 
 <AccordionGroup>
   <Accordion icon="circle-question" title="How can I contribute?">
-    See [CONTRIBUTING.md](https://github.com/klawsh/klaw.sh/blob/main/CONTRIBUTING.md) for guidelines. Contributions welcome for:
+    See [CONTRIBUTING.md](https://github.com/klawsh/klaw.sh/blob/main/CONTRIBUTING.md). Contributions welcome for:
     - Bug fixes
     - New features
     - Documentation
@@ -171,7 +269,7 @@ description: 'Frequently asked questions about klaw'
     [GitHub Issues](https://github.com/klawsh/klaw.sh/issues)
 
     Include:
-    - klaw version
+    - klaw version (`klaw version`)
     - OS and architecture
     - Steps to reproduce
     - Relevant logs
