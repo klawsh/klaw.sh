@@ -15,6 +15,7 @@ import (
 	"github.com/eachlabs/klaw/internal/config"
 	"github.com/eachlabs/klaw/internal/memory"
 	"github.com/eachlabs/klaw/internal/provider"
+	"github.com/eachlabs/klaw/internal/session"
 	"github.com/eachlabs/klaw/internal/skill"
 	"github.com/eachlabs/klaw/internal/tool"
 	"github.com/eachlabs/klaw/internal/tui"
@@ -26,6 +27,8 @@ var (
 	chatAgent    string
 	chatSimple   bool
 	chatProvider string
+	chatSession  string
+	chatName     string
 )
 
 var chatCmd = &cobra.Command{
@@ -45,6 +48,8 @@ func init() {
 	chatCmd.Flags().StringVarP(&chatAgent, "agent", "a", "", "agent profile to use")
 	chatCmd.Flags().BoolVar(&chatSimple, "simple", false, "use simple terminal mode (no TUI)")
 	chatCmd.Flags().StringVarP(&chatProvider, "provider", "p", "", "provider: anthropic, eachlabs (default: auto-detect)")
+	chatCmd.Flags().StringVarP(&chatSession, "session", "s", "", "resume an existing session by ID")
+	chatCmd.Flags().StringVar(&chatName, "name", "", "name for the new session")
 }
 
 func runChat(cmd *cobra.Command, args []string) error {
@@ -192,6 +197,37 @@ func runChat(cmd *cobra.Command, args []string) error {
 	// Load skills and add to system prompt
 	systemPrompt = loadSkillsIntoPrompt(systemPrompt)
 
+	// Create session manager and load/create session
+	sessMgr := session.NewManager()
+	var sess *session.Session
+	var initialHistory []provider.Message
+
+	if chatSession != "" {
+		// Resume existing session
+		var err error
+		sess, err = sessMgr.Load(chatSession)
+		if err != nil {
+			return fmt.Errorf("failed to load session: %w", err)
+		}
+		initialHistory = sess.Messages
+		fmt.Printf("Resuming session: %s", sess.ID)
+		if sess.Name != "" {
+			fmt.Printf(" (%s)", sess.Name)
+		}
+		fmt.Println()
+	} else {
+		// Create new session
+		sess = sessMgr.New(model, providerName, chatAgent, systemPrompt, workDir)
+		if chatName != "" {
+			sessMgr.SetName(chatName)
+		}
+		fmt.Printf("Session: %s", sess.ID)
+		if chatName != "" {
+			fmt.Printf(" (%s)", chatName)
+		}
+		fmt.Println()
+	}
+
 	// Handle signals
 	ctx, cancel := context.WithCancel(cmd.Context())
 	defer cancel()
@@ -201,43 +237,53 @@ func runChat(cmd *cobra.Command, args []string) error {
 
 	go func() {
 		<-sigCh
+		// Force save before exit
+		_ = sessMgr.ForceSave()
 		cancel()
 	}()
 
 	// Use simple mode or TUI mode
 	if chatSimple {
-		return runSimpleChat(ctx, prov, tools, mem, systemPrompt)
+		err := runSimpleChat(ctx, prov, tools, mem, systemPrompt, sessMgr, initialHistory)
+		_ = sessMgr.ForceSave()
+		return err
 	}
 
-	return runTUIChat(ctx, prov, tools, mem, systemPrompt)
+	tuiErr := runTUIChat(ctx, prov, tools, mem, systemPrompt, sessMgr, initialHistory)
+	_ = sessMgr.ForceSave()
+	return tuiErr
 }
 
-func runSimpleChat(ctx context.Context, prov provider.Provider, tools *tool.Registry, mem memory.Memory, systemPrompt string) error {
+func runSimpleChat(ctx context.Context, prov provider.Provider, tools *tool.Registry, mem memory.Memory, systemPrompt string, sessMgr *session.Manager, initialHistory []provider.Message) error {
 	// Simple terminal mode
 	term := channel.NewStyledTerminal()
 
 	ag := agent.New(agent.Config{
-		Provider:     prov,
-		Channel:      term,
-		Tools:        tools,
-		Memory:       mem,
-		SystemPrompt: systemPrompt,
+		Provider:       prov,
+		Channel:        term,
+		Tools:          tools,
+		Memory:         mem,
+		SessionManager: sessMgr,
+		InitialHistory: initialHistory,
+		SystemPrompt:   systemPrompt,
 	})
 
 	return ag.Run(ctx)
 }
 
-func runTUIChat(ctx context.Context, prov provider.Provider, tools *tool.Registry, mem memory.Memory, systemPrompt string) error {
+func runTUIChat(ctx context.Context, prov provider.Provider, tools *tool.Registry, mem memory.Memory, systemPrompt string, sessMgr *session.Manager, initialHistory []provider.Message) error {
 	// Create TUI channel
 	tuiChan := channel.NewTUIChannel()
 
 	// Create agent
 	ag := agent.New(agent.Config{
-		Provider:     prov,
-		Channel:      tuiChan,
-		Tools:        tools,
-		Memory:       mem,
-		SystemPrompt: systemPrompt,
+		Provider:       prov,
+		Channel:        tuiChan,
+		Tools:          tools,
+		Memory:         mem,
+		SessionManager: sessMgr,
+		InitialHistory: initialHistory,
+		SystemPrompt:   systemPrompt,
 	})
 
 	// Start agent in background

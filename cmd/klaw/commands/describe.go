@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/eachlabs/klaw/internal/config"
+	"github.com/eachlabs/klaw/internal/session"
 	"github.com/spf13/cobra"
 )
 
@@ -48,46 +48,73 @@ var describeSessionCmd = &cobra.Command{
 	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		sessionID := args[0]
-		sessionPath := filepath.Join(config.SessionsDir(), sessionID+".json")
 
-		data, err := os.ReadFile(sessionPath)
+		mgr := session.NewManager()
+		sess, err := mgr.Load(sessionID)
 		if err != nil {
-			if os.IsNotExist(err) {
-				return fmt.Errorf("session not found: %s", sessionID)
-			}
 			return err
 		}
 
-		var session map[string]interface{}
-		if err := json.Unmarshal(data, &session); err != nil {
-			return fmt.Errorf("invalid session data: %w", err)
-		}
-
 		if jsonOut {
-			fmt.Println(string(data))
-			return nil
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetIndent("", "  ")
+			return enc.Encode(sess)
 		}
 
-		fmt.Printf("Session: %s\n", sessionID)
+		// Print metadata
+		fmt.Printf("Session: %s\n", sess.ID)
+		if sess.Name != "" {
+			fmt.Printf("Name: %s\n", sess.Name)
+		}
 		fmt.Println("---")
+		fmt.Printf("Model: %s\n", sess.Model)
+		fmt.Printf("Provider: %s\n", sess.Provider)
+		if sess.Agent != "" {
+			fmt.Printf("Agent: %s\n", sess.Agent)
+		}
+		if sess.WorkDir != "" {
+			fmt.Printf("Working Dir: %s\n", sess.WorkDir)
+		}
+		fmt.Printf("Created: %s\n", sess.CreatedAt.Format("2006-01-02 15:04:05"))
+		fmt.Printf("Updated: %s\n", sess.UpdatedAt.Format("2006-01-02 15:04:05"))
+		fmt.Printf("Messages: %d\n", len(sess.Messages))
 
-		if messages, ok := session["messages"].([]interface{}); ok {
-			fmt.Printf("Messages: %d\n", len(messages))
-			fmt.Println("\nTranscript:")
-			for _, m := range messages {
-				if msg, ok := m.(map[string]interface{}); ok {
-					role := msg["role"]
-					content := msg["content"]
-					if s, ok := content.(string); ok && len(s) > 200 {
-						content = s[:200] + "..."
-					}
-					fmt.Printf("\n[%s]: %v\n", role, content)
+		// Print transcript
+		if len(sess.Messages) > 0 {
+			fmt.Println("\n--- Transcript ---")
+			for _, msg := range sess.Messages {
+				role := msg.Role
+				content := msg.Content
+
+				// Handle tool results
+				if msg.ToolResult != nil {
+					fmt.Printf("\n[tool_result]: %s\n", truncateContent(msg.ToolResult.Content, 200))
+					continue
 				}
+
+				// Handle tool calls
+				if len(msg.ToolCalls) > 0 {
+					fmt.Printf("\n[%s]: %s\n", role, truncateContent(content, 200))
+					for _, tc := range msg.ToolCalls {
+						fmt.Printf("  -> tool_call: %s\n", tc.Name)
+					}
+					continue
+				}
+
+				fmt.Printf("\n[%s]: %s\n", role, truncateContent(content, 200))
 			}
 		}
 
 		return nil
 	},
+}
+
+// truncateContent truncates content for display
+func truncateContent(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + "..."
 }
 
 var describeModelCmd = &cobra.Command{

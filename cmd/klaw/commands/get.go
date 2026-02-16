@@ -12,6 +12,7 @@ import (
 	"github.com/eachlabs/klaw/internal/cluster"
 	"github.com/eachlabs/klaw/internal/config"
 	"github.com/eachlabs/klaw/internal/runtime"
+	"github.com/eachlabs/klaw/internal/session"
 	"github.com/spf13/cobra"
 )
 
@@ -81,30 +82,15 @@ var getSessionsCmd = &cobra.Command{
 	Aliases: []string{"sess", "session"},
 	Short:   "List chat sessions",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		sessDir := config.SessionsDir()
-		entries, err := os.ReadDir(sessDir)
+		mgr := session.NewManager()
+		sessions, err := mgr.List()
 		if err != nil {
-			if os.IsNotExist(err) {
-				fmt.Println("No sessions found.")
-				return nil
-			}
 			return err
-		}
-
-		var sessions []sessionInfo
-		for _, e := range entries {
-			if !strings.HasSuffix(e.Name(), ".json") {
-				continue
-			}
-			info, _ := e.Info()
-			sessions = append(sessions, sessionInfo{
-				ID:      strings.TrimSuffix(e.Name(), ".json"),
-				ModTime: info.ModTime(),
-			})
 		}
 
 		if len(sessions) == 0 {
 			fmt.Println("No sessions found.")
+			fmt.Println("Start a new session with: klaw chat")
 			return nil
 		}
 
@@ -115,17 +101,26 @@ var getSessionsCmd = &cobra.Command{
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "ID\tLAST MODIFIED")
+		fmt.Fprintln(w, "ID\tNAME\tMODEL\tMESSAGES\tUPDATED")
 		for _, s := range sessions {
-			fmt.Fprintf(w, "%s\t%s\n", s.ID, s.ModTime.Format(time.RFC3339))
+			name := s.Name
+			if name == "" {
+				name = "-"
+			}
+			model := truncateModel(s.Model, 25)
+			updated := s.UpdatedAt.Format("2006-01-02 15:04")
+			fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\n", s.ID, name, model, len(s.Messages), updated)
 		}
 		return w.Flush()
 	},
 }
 
-type sessionInfo struct {
-	ID      string    `json:"id"`
-	ModTime time.Time `json:"modified"`
+// truncateModel truncates a model name for display
+func truncateModel(model string, max int) string {
+	if len(model) <= max {
+		return model
+	}
+	return model[:max-3] + "..."
 }
 
 var getModelsCmd = &cobra.Command{

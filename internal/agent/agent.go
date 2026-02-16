@@ -11,30 +11,34 @@ import (
 	"github.com/eachlabs/klaw/internal/channel"
 	"github.com/eachlabs/klaw/internal/memory"
 	"github.com/eachlabs/klaw/internal/provider"
+	"github.com/eachlabs/klaw/internal/session"
 	"github.com/eachlabs/klaw/internal/tool"
 )
 
 // Agent coordinates the conversation between user, LLM, and tools.
 type Agent struct {
-	provider provider.Provider
-	channel  channel.Channel
-	tools    *tool.Registry
-	memory   memory.Memory
+	provider       provider.Provider
+	channel        channel.Channel
+	tools          *tool.Registry
+	memory         memory.Memory
+	sessionManager *session.Manager
 
 	systemPrompt string
-	history      []provider.Message                // Default history for single-conversation channels
-	histories    map[string][]provider.Message     // Per-conversation histories (for multi-thread channels like Slack)
+	history      []provider.Message            // Default history for single-conversation channels
+	histories    map[string][]provider.Message // Per-conversation histories (for multi-thread channels like Slack)
 	maxTokens    int
 }
 
 // Config holds agent configuration.
 type Config struct {
-	Provider     provider.Provider
-	Channel      channel.Channel
-	Tools        *tool.Registry
-	Memory       memory.Memory
-	SystemPrompt string
-	MaxTokens    int
+	Provider       provider.Provider
+	Channel        channel.Channel
+	Tools          *tool.Registry
+	Memory         memory.Memory
+	SessionManager *session.Manager
+	InitialHistory []provider.Message
+	SystemPrompt   string
+	MaxTokens      int
 }
 
 // New creates a new agent.
@@ -44,15 +48,22 @@ func New(cfg Config) *Agent {
 		maxTokens = 8192
 	}
 
+	// Use initial history if provided (for session resume)
+	history := cfg.InitialHistory
+	if history == nil {
+		history = make([]provider.Message, 0)
+	}
+
 	return &Agent{
-		provider:     cfg.Provider,
-		channel:      cfg.Channel,
-		tools:        cfg.Tools,
-		memory:       cfg.Memory,
-		systemPrompt: cfg.SystemPrompt,
-		history:      make([]provider.Message, 0),
-		histories:    make(map[string][]provider.Message),
-		maxTokens:    maxTokens,
+		provider:       cfg.Provider,
+		channel:        cfg.Channel,
+		tools:          cfg.Tools,
+		memory:         cfg.Memory,
+		sessionManager: cfg.SessionManager,
+		systemPrompt:   cfg.SystemPrompt,
+		history:        history,
+		histories:      make(map[string][]provider.Message),
+		maxTokens:      maxTokens,
 	}
 }
 
@@ -176,6 +187,10 @@ func (a *Agent) handleMessage(ctx context.Context, msg *channel.Message) error {
 
 		// If no tool calls, we're done
 		if len(toolCalls) == 0 {
+			// Force save session when turn completes
+			if a.sessionManager != nil {
+				_ = a.sessionManager.ForceSave()
+			}
 			return nil
 		}
 
@@ -275,6 +290,11 @@ func (a *Agent) getHistory(conversationID string) []provider.Message {
 func (a *Agent) setHistory(conversationID string, history []provider.Message) {
 	if conversationID == "default" {
 		a.history = history
+		// Sync to session manager if available
+		if a.sessionManager != nil {
+			a.sessionManager.SetMessages(history)
+			_ = a.sessionManager.Save() // Debounced save
+		}
 		return
 	}
 	a.histories[conversationID] = history
