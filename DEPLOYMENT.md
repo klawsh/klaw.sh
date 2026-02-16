@@ -64,7 +64,7 @@ VERSION="YYYY.MM.DD.ID"
 
 ```bash
 cd ../website
-wrangler deploy
+wrangler pages deploy
 ```
 
 ## File Locations
@@ -80,7 +80,7 @@ wrangler deploy
 
 - **klaw**: https://github.com/klawsh/klaw.sh
 - **website**: Contains `public/install.sh` for https://klaw.sh
-  - Deployed via Cloudflare Workers: `wrangler deploy`
+  - Deployed via Cloudflare Pages: `wrangler pages deploy`
   - No git push needed, just run wrangler
 
 ## Quick Deploy Commands
