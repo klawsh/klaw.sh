@@ -52,12 +52,19 @@ gh release create YYYY.MM.DD.ID \
 
 Update fallback version in both locations:
 
-1. **klaw repo**: `install.sh`
-2. **website repo**: `public/install.sh`
+1. **klaw repo**: `install.sh` (then git push)
+2. **website repo**: `public/install.sh` (then wrangler deploy)
 
 Change the fallback version:
 ```sh
 VERSION="YYYY.MM.DD.ID"
+```
+
+### 4. Deploy Website
+
+```bash
+cd ../website
+wrangler deploy
 ```
 
 ## File Locations
@@ -73,6 +80,8 @@ VERSION="YYYY.MM.DD.ID"
 
 - **klaw**: https://github.com/klawsh/klaw.sh
 - **website**: Contains `public/install.sh` for https://klaw.sh
+  - Deployed via Cloudflare Workers: `wrangler deploy`
+  - No git push needed, just run wrangler
 
 ## Quick Deploy Commands
 
