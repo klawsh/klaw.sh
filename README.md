@@ -399,10 +399,12 @@ Those are frameworks for **building** agents. klaw is infrastructure for **opera
 
 ### "Is this about sandboxing agents?"
 
-Yes. Agents run in namespaces with:
+**Partial.** Namespaces provide *logical* isolation:
 - **Scoped secrets** — sales can't access support's API keys
 - **Tool permissions** — agents only get the tools you allow
 - **Resource isolation** — each namespace is independent
+
+**Important:** Non-containerized agents have **no filesystem sandboxing** — they run under your user account and can access any file you can. For true process/filesystem isolation, run agents in Podman containers with `klaw run`.
 
 ### "Can I run this on-prem?"
 
