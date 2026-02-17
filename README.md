@@ -25,6 +25,7 @@
   <img src="https://img.shields.io/badge/license-each::labs-green.svg" alt="License" />
   <img src="https://img.shields.io/badge/go-1.24+-00ADD8.svg" alt="Go Version" />
   <img src="https://img.shields.io/github/stars/klawsh/klaw.sh?style=social" alt="Stars" />
+  <a href="https://deepwiki.com/klawsh/klaw.sh"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
 </p>
 
 ---
