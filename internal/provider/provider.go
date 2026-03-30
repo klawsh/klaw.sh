@@ -87,4 +87,5 @@ type StreamEvent struct {
 	Text    string    // For text events
 	ToolUse *ToolCall // For tool_use events
 	Error   error     // For error events
+	Usage   *Usage    // For stop events: token usage
 }

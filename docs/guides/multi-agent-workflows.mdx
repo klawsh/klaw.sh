@@ -67,26 +67,80 @@ Override with `@agent` syntax:
 @devops Deploy the changes
 ```
 
-## Agent Spawning
+## Inline Delegation
 
-Agents can spawn sub-agents for specific tasks:
+The `delegate` tool lets a main agent spawn ephemeral sub-agents that execute immediately and return results. This is the primary mechanism for task decomposition within a single conversation.
 
 ```
 ┌─────────────────────────────────────────────────┐
 │               Main Agent                         │
 │  "Build a full-stack feature with tests"        │
 └──────────────────┬──────────────────────────────┘
-                   │
+                   │ delegate (parallel)
      ┌─────────────┼─────────────┐
      │             │             │
      ▼             ▼             ▼
 ┌─────────┐  ┌─────────┐  ┌─────────┐
 │Frontend │  │ Backend │  │  Tests  │
-│  Agent  │  │  Agent  │  │  Agent  │
-└─────────┘  └─────────┘  └─────────┘
+│Sub-Agent│  │Sub-Agent│  │Sub-Agent│
+└────┬────┘  └────┬────┘  └────┬────┘
+     │             │             │
+     └─────────────┴─────────────┘
+              Results returned
+              to main agent
 ```
 
-### Using agent_spawn Tool
+### Using the delegate Tool
+
+```json
+{
+  "tool": "delegate",
+  "input": {
+    "task": "Create React components for user authentication",
+    "tools": ["read", "write", "edit", "glob", "bash"],
+    "system_prompt": "You are a frontend specialist. Use React and TypeScript."
+  }
+}
+```
+
+**Key properties:**
+- Sub-agents run inline — the main agent waits for the result
+- Each sub-agent gets its own tool set (configurable via allowlist)
+- Sub-agents can nest up to 3 levels deep
+- 5-minute timeout per delegation
+- Output truncated at 30,000 characters
+
+### In Practice
+
+```
+User: Build a user profile feature with frontend, backend, and tests
+
+Agent: I'll delegate each part to a specialized sub-agent:
+
+╭─ delegate
+│ Task: Create React components for user profile
+│ Tools: [read, write, edit, glob, bash]
+│ Result: Created ProfilePage.tsx, ProfileForm.tsx, ProfileAvatar.tsx
+╰─
+
+╭─ delegate
+│ Task: Create /api/profile endpoint with CRUD operations
+│ Tools: [read, write, edit, glob, bash]
+│ Result: Created profile_handler.go, profile_routes.go
+╰─
+
+╭─ delegate
+│ Task: Write tests for the profile feature
+│ Tools: [read, write, edit, glob, bash]
+│ Result: Created profile.test.tsx, profile_handler_test.go
+╰─
+
+All components complete. The feature is ready for review.
+```
+
+## Persistent Agent Spawning
+
+For long-lived agents that persist across conversations, use `agent_spawn` to create orchestrator bindings:
 
 ```json
 {
@@ -99,23 +153,7 @@ Agents can spawn sub-agents for specific tasks:
 }
 ```
 
-### In Practice
-
-```
-User: Build a user profile feature with frontend, backend, and tests
-
-Agent: I'll coordinate this by spawning specialized agents:
-
-[Tool: agent_spawn] Creating frontend-worker...
-[Tool: agent_spawn] Creating backend-worker...
-[Tool: agent_spawn] Creating test-writer...
-
-Frontend worker creating: ProfilePage.tsx, ProfileForm.tsx
-Backend worker creating: /api/profile endpoint
-Test worker creating: profile.test.ts, profile_test.go
-
-All components complete. The feature is ready for review.
-```
+Use `agent_spawn` when you need agents that are routable via `@agent` syntax and persist beyond a single conversation. Use `delegate` when you need inline task execution within a conversation.
 
 ## Workflow Patterns
 
@@ -143,7 +181,7 @@ klaw dispatch "Deploy the auth changes" --agent devops
 
 ### Parallel Execution
 
-Independent tasks run simultaneously:
+Independent tasks run simultaneously. With the `delegate` tool, the LLM can issue multiple delegations in a single turn and they execute in parallel:
 
 ```
      ┌── Security Review ──┐
@@ -153,7 +191,17 @@ Task ├── Code Review ──────┼── Aggregate
      └── Performance Review┘
 ```
 
-In Slack or chat:
+Via inline delegation:
+
+```
+Agent calls delegate("Review auth.go for vulnerabilities")
+Agent calls delegate("Review auth.go for code quality")
+Agent calls delegate("Review auth.go for performance")
+→ All three sub-agents run in parallel
+→ Results collected and aggregated
+```
+
+Or in Slack with orchestrator routing:
 
 ```
 @security Review auth.go for vulnerabilities

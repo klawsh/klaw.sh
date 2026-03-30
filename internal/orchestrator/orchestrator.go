@@ -303,11 +303,17 @@ func (o *Orchestrator) runAgent(ctx context.Context, name string, content string
 	// Create a one-shot channel that sends the message and captures response
 	msgChan := make(chan *channel.Message, 10)
 
+	// Use per-agent tool filtering if configured
+	agentTools := o.config.Tools
+	if len(agentCfg.Tools) > 0 {
+		agentTools = o.config.Tools.Filter(agentCfg.Tools)
+	}
+
 	// Create agent
 	ag := agent.New(agent.Config{
 		Provider:     o.config.Provider,
 		Channel:      &proxyChannel{input: msgChan, output: o.channel, ctx: ctx},
-		Tools:        o.config.Tools, // TODO: per-agent tools
+		Tools:        agentTools,
 		SystemPrompt: agentCfg.SystemPrompt,
 	})
 

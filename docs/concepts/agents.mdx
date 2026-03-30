@@ -103,14 +103,40 @@ max_tokens = 4096
 
 ## Agent Properties
 
-| Property | Description | Required |
-|----------|-------------|----------|
-| `name` | Unique identifier for the agent | Yes |
-| `model` | LLM model to use | Yes |
-| `task` | Description of the agent's purpose | No |
-| `tools` | List of tools/skills the agent can use | No |
-| `workdir` | Working directory for file operations | No |
-| `runtime` | Execution environment (`process` or `docker`) | No |
+| Property | Description | Required | Default |
+|----------|-------------|----------|---------|
+| `name` | Unique identifier for the agent | Yes | — |
+| `model` | LLM model to use | Yes | — |
+| `task` | Description of the agent's purpose | No | — |
+| `tools` | Allowlist of tools the agent can use | No | All tools |
+| `workdir` | Working directory for file operations | No | CWD |
+| `runtime` | Execution environment (`process` or `docker`) | No | `process` |
+| `max_iterations` | Maximum agent loop iterations | No | `50` |
+| `require_approval` | Tool names requiring user confirmation | No | `[]` |
+
+## Agent Configuration
+
+Per-agent settings in `config.toml` let you customize tool access, iteration limits, and approval requirements for each agent independently:
+
+```toml
+[agent.default]
+tools = ["bash", "read", "write", "edit", "glob", "grep", "web_fetch", "web_search"]
+max_iterations = 50
+require_approval = ["bash"]
+
+[agent.researcher]
+tools = ["read", "glob", "grep", "web_fetch", "web_search"]
+max_iterations = 30
+
+[agent.coder]
+tools = ["bash", "read", "write", "edit", "glob", "grep"]
+max_iterations = 100
+require_approval = ["bash", "write"]
+```
+
+**Tool filtering** restricts which tools an agent can use. If `tools` is omitted, the agent has access to all registered tools. When specified, only the listed tools are available — the agent cannot call tools outside its allowlist.
+
+**Approval gating** requires user confirmation before specific tools execute. When a tool in the `require_approval` list is called, the user sees a prompt and must approve or deny execution.
 
 ## Managing Agents
 
@@ -201,7 +227,11 @@ klaw create agent devops \
 
 ### Agent Spawning
 
-Agents can spawn sub-agents for complex tasks:
+klaw supports two forms of sub-agent creation:
+
+**`agent_spawn`** — Creates persistent agent bindings for the orchestrator. These are long-lived agents that can be routed to via `@agent` syntax.
+
+**`delegate`** — Spawns ephemeral sub-agents inline during a conversation. The sub-agent executes immediately, and its result is returned directly to the parent. This is the primary mechanism for multi-step task decomposition.
 
 ```
 User: "Build a full-stack application with tests"
@@ -211,17 +241,34 @@ User: "Build a full-stack application with tests"
 │  Main Agent     │
 │  (Coordinator)  │
 └────────┬────────┘
-         │ spawns
-    ┌────┴────┐
-    │         │
-    ▼         ▼
-┌───────┐ ┌───────┐
-│Frontend│ │Backend│
-│ Agent  │ │ Agent │
-└───────┘ └───────┘
+         │ delegate
+    ┌────┼────┐
+    │    │    │
+    ▼    ▼    ▼
+┌──────┐┌──────┐┌──────┐
+│Front ││Back  ││Tests │
+│end   ││end   ││      │
+└──────┘└──────┘└──────┘
+   │        │       │
+   └────────┴───────┘
+         │
+    Results returned
+    to main agent
 ```
 
-Use the `agent_spawn` tool:
+Use the `delegate` tool for inline sub-agents:
+
+```json
+{
+  "tool": "delegate",
+  "input": {
+    "task": "Create React components for the user dashboard",
+    "tools": ["read", "write", "edit", "glob", "bash"]
+  }
+}
+```
+
+Or `agent_spawn` for persistent bindings:
 
 ```json
 {
@@ -277,6 +324,12 @@ Use the `agent_spawn` tool:
   </Accordion>
   <Accordion icon="brain" title="Use appropriate models">
     Match model capabilities to task complexity. Use Sonnet for most tasks, Opus for complex reasoning.
+  </Accordion>
+  <Accordion icon="coins" title="Set cost budgets">
+    Use `max_session_cost` to cap spending per session. Start conservative (e.g., $5.00) and adjust based on your workload. The agent stops gracefully when the budget is reached.
+  </Accordion>
+  <Accordion icon="lock" title="Require approval for risky tools">
+    Add `require_approval = ["bash", "write"]` to agents that modify files or run commands. This adds a human-in-the-loop check before execution.
   </Accordion>
 </AccordionGroup>
 

@@ -173,7 +173,13 @@ func (a *Anthropic) Stream(ctx context.Context, req *ChatRequest) (<-chan Stream
 				}
 
 			case anthropic.MessageStreamEventTypeMessageStop:
-				events <- StreamEvent{Type: "stop"}
+				events <- StreamEvent{
+					Type: "stop",
+					Usage: &Usage{
+						InputTokens:  int(event.Message.Usage.InputTokens),
+						OutputTokens: int(event.Message.Usage.OutputTokens),
+					},
+				}
 			}
 		}
 

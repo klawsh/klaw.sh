@@ -17,6 +17,7 @@ import (
 	"github.com/eachlabs/klaw/internal/memory"
 	"github.com/eachlabs/klaw/internal/provider"
 	"github.com/eachlabs/klaw/internal/scheduler"
+	"github.com/eachlabs/klaw/internal/server"
 	"github.com/eachlabs/klaw/internal/skill"
 	"github.com/eachlabs/klaw/internal/tool"
 	"github.com/spf13/cobra"
@@ -78,12 +79,14 @@ func runStart(cmd *cobra.Command, args []string) error {
 	providerName := startProvider
 
 	if providerName == "" {
-		if os.Getenv("OPENROUTER_API_KEY") != "" {
+		if os.Getenv("ANTHROPIC_API_KEY") != "" {
+			providerName = "anthropic"
+		} else if os.Getenv("OPENROUTER_API_KEY") != "" {
 			providerName = "openrouter"
 		} else if os.Getenv("EACHLABS_API_KEY") != "" {
 			providerName = "eachlabs"
-		} else if os.Getenv("ANTHROPIC_API_KEY") != "" {
-			providerName = "anthropic"
+		} else if name := firstCustomProvider(cfg); name != "" {
+			providerName = name
 		} else {
 			providerName = "anthropic"
 		}
@@ -108,55 +111,9 @@ func runStart(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create provider
-	switch providerName {
-	case "openrouter":
-		apiKey := os.Getenv("OPENROUTER_API_KEY")
-		if apiKey == "" {
-			return fmt.Errorf("OPENROUTER_API_KEY not set")
-		}
-		prov, err = provider.NewOpenRouter(provider.OpenRouterConfig{
-			APIKey: apiKey,
-			Model:  model,
-		})
-		if err != nil {
-			return fmt.Errorf("failed to create openrouter provider: %w", err)
-		}
-
-	case "eachlabs":
-		apiKey := os.Getenv("EACHLABS_API_KEY")
-		if apiKey == "" {
-			if eachCfg, ok := cfg.Provider["eachlabs"]; ok {
-				apiKey = eachCfg.APIKey
-			}
-		}
-		if apiKey == "" {
-			return fmt.Errorf("EACHLABS_API_KEY not set")
-		}
-		prov, err = provider.NewEachLabs(provider.EachLabsConfig{
-			APIKey: apiKey,
-			Model:  model,
-		})
-		if err != nil {
-			return fmt.Errorf("failed to create eachlabs provider: %w", err)
-		}
-
-	default: // anthropic
-		apiKey := os.Getenv("ANTHROPIC_API_KEY")
-		if apiKey == "" {
-			if anthropicCfg, ok := cfg.Provider["anthropic"]; ok {
-				apiKey = anthropicCfg.APIKey
-			}
-		}
-		if apiKey == "" {
-			return fmt.Errorf("ANTHROPIC_API_KEY not set")
-		}
-		prov, err = provider.NewAnthropic(provider.AnthropicConfig{
-			APIKey: apiKey,
-			Model:  model,
-		})
-		if err != nil {
-			return fmt.Errorf("failed to create provider: %w", err)
-		}
+	prov, err = buildProvider(cfg, providerName, model)
+	if err != nil {
+		return err
 	}
 
 	// Get context
@@ -440,6 +397,54 @@ You are a capable AI that can LEARN and ADAPT. Use your tools to extend your abi
 		fmt.Println("\nShutting down...")
 		cancel()
 	}()
+
+	// Start OpenAI-compatible gateway if enabled
+	if cfg.OpenAI.Enabled {
+		providerMap := map[string]provider.Provider{
+			providerName: prov,
+		}
+
+		openaiCfg := server.OpenAIConfig{
+			Enabled:       cfg.OpenAI.Enabled,
+			AuthRequired:  cfg.OpenAI.AuthRequired,
+			APIKeys:       cfg.OpenAI.APIKeys,
+			DefaultModel:  cfg.OpenAI.DefaultModel,
+			CORSOrigins:   cfg.OpenAI.CORSOrigins,
+			MaxConcurrent: cfg.OpenAI.MaxConcurrent,
+			Models:        make(map[string]server.ModelMapping),
+		}
+		for id, m := range cfg.OpenAI.Models {
+			provName := m.Provider
+			if provName == "" {
+				provName = providerName
+			}
+			// Ensure provider exists in map
+			if _, ok := providerMap[provName]; !ok {
+				providerMap[provName] = prov // fallback to default provider
+			}
+			openaiCfg.Models[id] = server.ModelMapping{
+				Agent:    m.Agent,
+				Provider: provName,
+			}
+		}
+
+		srv := server.New(
+			openaiCfg,
+			server.ServerConfig{Host: cfg.Server.Host, Port: cfg.Server.Port},
+			providerMap,
+			tools,
+			mem,
+			systemPrompt,
+			nil, // no skill loader in embedded mode — use klaw serve for full skill support
+		)
+
+		go func() {
+			if err := srv.Start(ctx); err != nil && err.Error() != "http: Server closed" {
+				fmt.Printf("OpenAI gateway error: %v\n", err)
+			}
+		}()
+		fmt.Printf("OpenAI-compatible API: http://%s:%d/v1/chat/completions\n", cfg.Server.Host, cfg.Server.Port)
+	}
 
 	// Start Slack channel
 	if err := slackChan.Start(ctx); err != nil {

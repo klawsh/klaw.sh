@@ -4,6 +4,7 @@ package tool
 import (
 	"context"
 	"encoding/json"
+	"sort"
 )
 
 // Tool is any capability the agent can invoke.
@@ -57,6 +58,31 @@ func (r *Registry) All() []Tool {
 		result = append(result, t)
 	}
 	return result
+}
+
+// Filter returns a new registry containing only the named tools.
+// If allowlist is empty, the original registry is returned.
+func (r *Registry) Filter(allowlist []string) *Registry {
+	if len(allowlist) == 0 {
+		return r
+	}
+	filtered := NewRegistry()
+	for _, name := range allowlist {
+		if t, ok := r.tools[name]; ok {
+			filtered.Register(t)
+		}
+	}
+	return filtered
+}
+
+// Names returns a sorted list of all registered tool names.
+func (r *Registry) Names() []string {
+	names := make([]string, 0, len(r.tools))
+	for name := range r.tools {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 // DefaultRegistry returns a registry with all standard tools.

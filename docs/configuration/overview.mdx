@@ -31,6 +31,7 @@ klaw uses TOML for configuration. Files are stored in `~/.klaw/`:
 model = "claude-sonnet-4-20250514"
 agent = "default"
 namespace = "default"
+max_session_cost = 5.00
 
 # Workspace directory
 [workspace]
@@ -40,10 +41,13 @@ path = "~/.klaw/workspace"
 [provider.anthropic]
 api_key = "${ANTHROPIC_API_KEY}"
 model = "claude-sonnet-4-20250514"
+max_retries = 3
+fallback = "openrouter"
 
 [provider.openrouter]
 api_key = "${OPENROUTER_API_KEY}"
 model = "anthropic/claude-sonnet-4"
+max_retries = 3
 
 [provider.eachlabs]
 api_key = "${EACHLABS_API_KEY}"
@@ -163,6 +167,36 @@ Override with `--provider`:
 klaw chat --provider anthropic
 ```
 
+### Provider Resilience
+
+Configure retry and fallback behavior per provider:
+
+```toml
+[provider.anthropic]
+api_key = "${ANTHROPIC_API_KEY}"
+model = "claude-sonnet-4-20250514"
+max_retries = 3       # Retry up to 3 times with exponential backoff
+fallback = "openrouter" # Fallback provider on failure
+```
+
+| Field | Description | Default |
+|-------|-------------|---------|
+| `max_retries` | Number of retry attempts with exponential backoff | `3` |
+| `fallback` | Name of fallback provider to use after retries exhaust | None |
+
+Retries use exponential backoff starting at 1s, capped at 30s, with 25% random jitter. Retryable errors include HTTP 429 (rate limit), 500, 502, 503, and connection errors.
+
+### Cost Budget
+
+Set a per-session spending limit in the `[defaults]` section:
+
+```toml
+[defaults]
+max_session_cost = 5.00  # Maximum cost in USD per session (0 = unlimited)
+```
+
+When the budget is reached, the agent stops with a `budget_exceeded` error. A warning is logged when cost reaches 80% of the budget.
+
 ## Channel Configuration
 
 ### Slack
@@ -237,6 +271,32 @@ agent = "devops"
 
 # AI handles everything else
 ```
+
+## Per-Agent Configuration
+
+Define per-agent settings under `[agent.<name>]`. Each agent can have its own tool allowlist, iteration limit, and approval requirements:
+
+```toml
+[agent.default]
+tools = ["bash", "read", "write", "edit", "glob", "grep", "web_fetch", "web_search"]
+max_iterations = 50
+require_approval = ["bash"]
+
+[agent.researcher]
+tools = ["read", "glob", "grep", "web_fetch", "web_search"]
+max_iterations = 30
+
+[agent.coder]
+tools = ["bash", "read", "write", "edit", "glob", "grep"]
+max_iterations = 100
+require_approval = ["bash", "write"]
+```
+
+| Field | Description | Default |
+|-------|-------------|---------|
+| `tools` | Allowlist of tool names this agent can use | All tools |
+| `max_iterations` | Maximum agent loop iterations | `50` |
+| `require_approval` | Tools requiring user confirmation before execution | `[]` |
 
 ## Tools Configuration
 

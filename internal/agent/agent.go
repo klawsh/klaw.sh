@@ -6,10 +6,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/eachlabs/klaw/internal/channel"
 	"github.com/eachlabs/klaw/internal/memory"
+	"github.com/eachlabs/klaw/internal/observe"
 	"github.com/eachlabs/klaw/internal/provider"
 	"github.com/eachlabs/klaw/internal/session"
 	"github.com/eachlabs/klaw/internal/tool"
@@ -23,10 +25,19 @@ type Agent struct {
 	memory         memory.Memory
 	sessionManager *session.Manager
 
-	systemPrompt string
-	history      []provider.Message            // Default history for single-conversation channels
-	histories    map[string][]provider.Message // Per-conversation histories (for multi-thread channels like Slack)
-	maxTokens    int
+	systemPrompt  string
+	history       []provider.Message            // Default history for single-conversation channels
+	histories     map[string][]provider.Message  // Per-conversation histories (for multi-thread channels like Slack)
+	maxTokens     int
+	maxIterations int
+	model         string
+	contextMgr    *ContextManager
+	costTracker   *CostTracker
+	reflection    ReflectionConfig
+	planner       PlannerConfig
+	approval      ApprovalConfig
+	logger        *observe.Logger
+	metrics       *observe.Metrics
 }
 
 // Config holds agent configuration.
@@ -39,6 +50,15 @@ type Config struct {
 	InitialHistory []provider.Message
 	SystemPrompt   string
 	MaxTokens      int
+	MaxIterations  int
+	Model          string
+	Context        ContextConfig
+	Cost           CostConfig
+	Reflection     ReflectionConfig
+	Planner        PlannerConfig
+	Approval       ApprovalConfig
+	Logger         *observe.Logger
+	Metrics        *observe.Metrics
 }
 
 // New creates a new agent.
@@ -46,6 +66,20 @@ func New(cfg Config) *Agent {
 	maxTokens := cfg.MaxTokens
 	if maxTokens == 0 {
 		maxTokens = 8192
+	}
+
+	maxIterations := cfg.MaxIterations
+	if maxIterations == 0 {
+		maxIterations = 50
+	}
+
+	logger := cfg.Logger
+	if logger == nil {
+		logger = observe.Nop()
+	}
+	metrics := cfg.Metrics
+	if metrics == nil {
+		metrics = observe.NewMetrics()
 	}
 
 	// Use initial history if provided (for session resume)
@@ -64,6 +98,15 @@ func New(cfg Config) *Agent {
 		history:        history,
 		histories:      make(map[string][]provider.Message),
 		maxTokens:      maxTokens,
+		maxIterations:  maxIterations,
+		model:          cfg.Model,
+		contextMgr:     NewContextManager(cfg.Context),
+		costTracker:    NewCostTracker(cfg.Cost),
+		reflection:     cfg.Reflection,
+		planner:        cfg.Planner,
+		approval:       cfg.Approval,
+		logger:         logger,
+		metrics:        metrics,
 	}
 }
 
@@ -125,10 +168,37 @@ func (a *Agent) handleMessage(ctx context.Context, msg *channel.Message) error {
 	// Build tool definitions
 	toolDefs := a.buildToolDefinitions()
 
+	// Inject planning prompt on first message if enabled
+	if a.planner.Enabled {
+		history = InjectPlanRequest(history, a.planner.PlanPrompt)
+		a.setHistory(conversationID, history)
+	}
+
+	toolCallsSinceReflection := 0
+
 	// Keep processing until we get a final response (no tool calls)
-	for {
+	for iteration := 0; iteration < a.maxIterations; iteration++ {
 		// Get latest history for this conversation
 		history = a.getHistory(conversationID)
+
+		// Check if context needs compaction
+		if a.contextMgr.NeedsCompaction(history) {
+			a.channel.Send(ctx, &channel.Message{
+				Role:      "assistant",
+				Content:   "Compacting context...\n",
+				IsPartial: true,
+			})
+			compacted, err := a.contextMgr.Compact(ctx, a.provider, a.systemPrompt, history)
+			if err == nil {
+				history = compacted
+				a.setHistory(conversationID, history)
+			}
+		}
+
+		// Check budget before making a provider call
+		if err := a.costTracker.CheckBudget(); err != nil {
+			return err
+		}
 
 		req := &provider.ChatRequest{
 			System:    a.systemPrompt,
@@ -140,7 +210,7 @@ func (a *Agent) handleMessage(ctx context.Context, msg *channel.Message) error {
 		// Stream response
 		events, err := a.provider.Stream(ctx, req)
 		if err != nil {
-			return fmt.Errorf("API error: %w", err)
+			return &AgentError{Code: ErrProvider, Message: "API error", Cause: err}
 		}
 
 		// Collect response
@@ -165,6 +235,17 @@ func (a *Agent) handleMessage(ctx context.Context, msg *channel.Message) error {
 				streamErr = event.Error
 
 			case "stop":
+				if event.Usage != nil {
+					a.contextMgr.RecordUsage(*event.Usage)
+					a.costTracker.Record(a.model, event.Usage.InputTokens, event.Usage.OutputTokens)
+					a.metrics.RecordRequest("default", event.Usage.InputTokens, event.Usage.OutputTokens)
+					a.logger.Debug("provider response",
+						"model", a.model,
+						"input_tokens", event.Usage.InputTokens,
+						"output_tokens", event.Usage.OutputTokens,
+						"cost", a.costTracker.Summary(),
+					)
+				}
 				a.channel.Send(ctx, &channel.Message{
 					Role:   "assistant",
 					IsDone: true,
@@ -173,7 +254,7 @@ func (a *Agent) handleMessage(ctx context.Context, msg *channel.Message) error {
 		}
 
 		if streamErr != nil {
-			return fmt.Errorf("stream error: %w", streamErr)
+			return &AgentError{Code: ErrProvider, Message: "stream error", Cause: streamErr}
 		}
 
 		// Add assistant response to history
@@ -187,71 +268,94 @@ func (a *Agent) handleMessage(ctx context.Context, msg *channel.Message) error {
 
 		// If no tool calls, we're done
 		if len(toolCalls) == 0 {
-			// Force save session when turn completes
+			// Update session with cost data and force save
 			if a.sessionManager != nil {
+				if sess := a.sessionManager.Session(); sess != nil {
+					input, output, _ := a.contextMgr.Usage()
+					sess.TotalInputTokens = input
+					sess.TotalOutputTokens = output
+					sess.TotalCost = a.costTracker.SessionCost()
+				}
 				_ = a.sessionManager.ForceSave()
 			}
 			return nil
 		}
 
-		// Execute tools and add results
-		for _, tc := range toolCalls {
-			// Show tool being called with input preview
-			toolDesc := tc.Name
-			if tc.Name == "bash" {
-				var params struct{ Command string `json:"command"` }
-				_ = json.Unmarshal(tc.Input, &params)
-				if params.Command != "" {
-					toolDesc = fmt.Sprintf("bash: %s", truncate(params.Command, 60))
+		// Phase 1: Approval — sequentially handle tools needing approval
+		type toolState struct {
+			tc       provider.ToolCall
+			approved bool
+			result   *tool.Result
+		}
+		states := make([]toolState, len(toolCalls))
+		for i, tc := range toolCalls {
+			states[i] = toolState{tc: tc, approved: true}
+
+			// Show tool being called
+			a.showToolStart(ctx, tc)
+
+			if a.approval.NeedsApproval(tc.Name) {
+				approved, err := RequestApproval(ctx, a.channel, tc)
+				if err != nil {
+					return &AgentError{Code: ErrToolExec, Message: "approval request failed", Cause: err}
+				}
+				if !approved {
+					states[i].approved = false
+					states[i].result = &tool.Result{Content: "Denied by user", IsError: true}
 				}
 			}
-			a.channel.Send(ctx, &channel.Message{
-				Role:      "assistant",
-				Content:   fmt.Sprintf("\n╭─ %s\n", toolDesc),
-				IsPartial: true,
-			})
+		}
 
-			result := a.executeTool(ctx, tc)
-
-			// Show tool result
-			if result.IsError {
-				a.channel.Send(ctx, &channel.Message{
-					Role:      "assistant",
-					Content:   fmt.Sprintf("│ ERROR: %s\n╰─\n", truncate(result.Content, 500)),
-					IsPartial: true,
-				})
-			} else {
-				// Format output with box drawing
-				lines := strings.Split(result.Content, "\n")
-				var output strings.Builder
-				for i, line := range lines {
-					if i >= 20 {
-						output.WriteString(fmt.Sprintf("│ ... (%d more lines)\n", len(lines)-20))
-						break
-					}
-					output.WriteString(fmt.Sprintf("│ %s\n", line))
-				}
-				output.WriteString("╰─\n")
-				a.channel.Send(ctx, &channel.Message{
-					Role:      "assistant",
-					Content:   output.String(),
-					IsPartial: true,
-				})
+		// Phase 2: Parallel execution of approved tools
+		var wg sync.WaitGroup
+		for i := range states {
+			if !states[i].approved {
+				continue
 			}
+			wg.Add(1)
+			go func(idx int) {
+				defer wg.Done()
+				toolStart := time.Now()
+				states[idx].result = a.executeTool(ctx, states[idx].tc)
+				toolDuration := time.Since(toolStart)
+				a.metrics.RecordToolCall("default", states[idx].tc.Name)
+				a.logger.Debug("tool executed",
+					"tool", states[idx].tc.Name,
+					"duration_ms", toolDuration.Milliseconds(),
+					"is_error", states[idx].result.IsError,
+				)
+			}(i)
+		}
+		wg.Wait()
 
-			// Add tool result to history
+		// Phase 3: Collect results in original order
+		for _, s := range states {
+			a.showToolResult(ctx, s.result)
 			history = append(history, provider.Message{
 				Role: "user",
 				ToolResult: &provider.ToolResult{
-					ToolUseID: tc.ID,
-					Content:   result.Content,
-					IsError:   result.IsError,
+					ToolUseID: s.tc.ID,
+					Content:   s.result.Content,
+					IsError:   s.result.IsError,
 				},
 			})
+			toolCallsSinceReflection++
+		}
+		a.setHistory(conversationID, history)
+
+		// Inject reflection if enough tool calls have accumulated
+		if ShouldReflect(a.reflection, toolCallsSinceReflection) {
+			history = InjectReflection(history, a.reflection.Prompt)
 			a.setHistory(conversationID, history)
+			toolCallsSinceReflection = 0
 		}
 
 		// Continue loop to get next response after tool results
+	}
+
+	return &AgentError{
+		Code:    ErrMaxIterations,
+		Message: fmt.Sprintf("reached maximum iterations (%d)", a.maxIterations),
 	}
 }
 
@@ -298,6 +402,48 @@ func (a *Agent) setHistory(conversationID string, history []provider.Message) {
 		return
 	}
 	a.histories[conversationID] = history
+}
+
+func (a *Agent) showToolStart(ctx context.Context, tc provider.ToolCall) {
+	toolDesc := tc.Name
+	if tc.Name == "bash" {
+		var params struct{ Command string `json:"command"` }
+		_ = json.Unmarshal(tc.Input, &params)
+		if params.Command != "" {
+			toolDesc = fmt.Sprintf("bash: %s", truncate(params.Command, 60))
+		}
+	}
+	a.channel.Send(ctx, &channel.Message{
+		Role:      "assistant",
+		Content:   fmt.Sprintf("\n╭─ %s\n", toolDesc),
+		IsPartial: true,
+	})
+}
+
+func (a *Agent) showToolResult(ctx context.Context, result *tool.Result) {
+	if result.IsError {
+		a.channel.Send(ctx, &channel.Message{
+			Role:      "assistant",
+			Content:   fmt.Sprintf("│ ERROR: %s\n╰─\n", truncate(result.Content, 500)),
+			IsPartial: true,
+		})
+	} else {
+		lines := strings.Split(result.Content, "\n")
+		var output strings.Builder
+		for i, line := range lines {
+			if i >= 20 {
+				output.WriteString(fmt.Sprintf("│ ... (%d more lines)\n", len(lines)-20))
+				break
+			}
+			output.WriteString(fmt.Sprintf("│ %s\n", line))
+		}
+		output.WriteString("╰─\n")
+		a.channel.Send(ctx, &channel.Message{
+			Role:      "assistant",
+			Content:   output.String(),
+			IsPartial: true,
+		})
+	}
 }
 
 func (a *Agent) executeTool(ctx context.Context, tc provider.ToolCall) *tool.Result {
@@ -378,11 +524,12 @@ func truncate(s string, max int) string {
 
 // RunOnceConfig holds configuration for a single agent run.
 type RunOnceConfig struct {
-	Provider     provider.Provider
-	Tools        *tool.Registry
-	SystemPrompt string
-	Prompt       string
-	MaxTokens    int
+	Provider      provider.Provider
+	Tools         *tool.Registry
+	SystemPrompt  string
+	Prompt        string
+	MaxTokens     int
+	MaxIterations int
 }
 
 // RunOnce runs an agent with a single prompt and returns the result.
@@ -390,6 +537,10 @@ func RunOnce(ctx context.Context, cfg RunOnceConfig) (string, error) {
 	maxTokens := cfg.MaxTokens
 	if maxTokens == 0 {
 		maxTokens = 8192
+	}
+	maxIterations := cfg.MaxIterations
+	if maxIterations == 0 {
+		maxIterations = 20
 	}
 
 	// Build tool definitions
@@ -409,7 +560,6 @@ func RunOnce(ctx context.Context, cfg RunOnceConfig) (string, error) {
 	}
 
 	var result strings.Builder
-	maxIterations := 20
 
 	for i := 0; i < maxIterations; i++ {
 		// Call provider
@@ -438,10 +588,11 @@ func RunOnce(ctx context.Context, cfg RunOnceConfig) (string, error) {
 			}
 		}
 
-		// Add assistant message
+		// Add assistant message with tool calls preserved
 		messages = append(messages, provider.Message{
-			Role:    "assistant",
-			Content: textContent.String(),
+			Role:      "assistant",
+			Content:   textContent.String(),
+			ToolCalls: toolCalls,
 		})
 
 		// If no tool calls, we're done
@@ -450,44 +601,49 @@ func RunOnce(ctx context.Context, cfg RunOnceConfig) (string, error) {
 			break
 		}
 
-		// Execute tools
-		var toolResults []provider.ToolResult
-		for _, tc := range toolCalls {
-			t, ok := cfg.Tools.Get(tc.Name)
-			if !ok {
-				toolResults = append(toolResults, provider.ToolResult{
-					ToolUseID: tc.ID,
-					Content:   fmt.Sprintf("Tool not found: %s", tc.Name),
-					IsError:   true,
-				})
-				continue
-			}
-
-			toolResult, err := t.Execute(ctx, tc.Input)
-			if err != nil {
-				toolResults = append(toolResults, provider.ToolResult{
-					ToolUseID: tc.ID,
-					Content:   fmt.Sprintf("Error: %v", err),
-					IsError:   true,
-				})
-			} else {
-				toolResults = append(toolResults, provider.ToolResult{
-					ToolUseID: tc.ID,
-					Content:   toolResult.Content,
-					IsError:   toolResult.IsError,
-				})
-			}
+		// Execute tools in parallel
+		type toolExecResult struct {
+			toolUseID string
+			content   string
+			isError   bool
 		}
+		results := make([]toolExecResult, len(toolCalls))
 
-		// Add tool results to messages
-		var toolResultContent strings.Builder
-		for _, tr := range toolResults {
-			toolResultContent.WriteString(fmt.Sprintf("[Tool Result: %s]\n%s\n", tr.ToolUseID, tr.Content))
+		var wg sync.WaitGroup
+		for j, tc := range toolCalls {
+			results[j].toolUseID = tc.ID
+			wg.Add(1)
+			go func(idx int, tc provider.ToolCall) {
+				defer wg.Done()
+				t, ok := cfg.Tools.Get(tc.Name)
+				if !ok {
+					results[idx].content = fmt.Sprintf("Tool not found: %s", tc.Name)
+					results[idx].isError = true
+					return
+				}
+				toolResult, err := t.Execute(ctx, tc.Input)
+				if err != nil {
+					results[idx].content = fmt.Sprintf("Error: %v", err)
+					results[idx].isError = true
+				} else {
+					results[idx].content = toolResult.Content
+					results[idx].isError = toolResult.IsError
+				}
+			}(j, tc)
 		}
-		messages = append(messages, provider.Message{
-			Role:    "user",
-			Content: toolResultContent.String(),
-		})
+		wg.Wait()
+
+		// Add each tool result as a separate message
+		for _, r := range results {
+			messages = append(messages, provider.Message{
+				Role: "user",
+				ToolResult: &provider.ToolResult{
+					ToolUseID: r.toolUseID,
+					Content:   r.content,
+					IsError:   r.isError,
+				},
+			})
+		}
 
 		// Check stop reason
 		if resp.StopReason == "end_turn" {

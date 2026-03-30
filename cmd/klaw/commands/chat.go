@@ -68,18 +68,20 @@ func runChat(cmd *cobra.Command, args []string) error {
 	var prov provider.Provider
 	providerName := chatProvider
 
-	// Auto-detect provider based on available API keys
+	// Auto-detect provider based on available API keys and config
 	if providerName == "" {
-		if os.Getenv("OPENROUTER_API_KEY") != "" {
+		if os.Getenv("ANTHROPIC_API_KEY") != "" {
+			providerName = "anthropic"
+		} else if os.Getenv("OPENROUTER_API_KEY") != "" {
 			providerName = "openrouter"
 		} else if os.Getenv("EACHLABS_API_KEY") != "" {
 			providerName = "eachlabs"
-		} else if os.Getenv("ANTHROPIC_API_KEY") != "" {
+		} else if cfg.Provider["anthropic"].APIKey != "" {
 			providerName = "anthropic"
 		} else if cfg.Provider["eachlabs"].APIKey != "" {
 			providerName = "eachlabs"
-		} else if cfg.Provider["anthropic"].APIKey != "" {
-			providerName = "anthropic"
+		} else if name := firstCustomProvider(cfg); name != "" {
+			providerName = name
 		} else {
 			providerName = "anthropic" // default
 		}
@@ -107,73 +109,28 @@ func runChat(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	switch providerName {
-	case "openrouter":
-		apiKey := os.Getenv("OPENROUTER_API_KEY")
-		if apiKey == "" {
-			fmt.Println("ERROR: OPENROUTER_API_KEY not set")
-			fmt.Println("")
-			fmt.Println("Get your API key at: https://openrouter.ai")
-			return fmt.Errorf("OpenRouter API key required")
-		}
-		var err error
-		prov, err = provider.NewOpenRouter(provider.OpenRouterConfig{
-			APIKey: apiKey,
-			Model:  model,
-		})
-		if err != nil {
-			return fmt.Errorf("failed to create openrouter provider: %w", err)
-		}
-		fmt.Printf("Using OpenRouter (model: %s)\n", model)
+	prov, err = buildProvider(cfg, providerName, model)
+	if err != nil {
+		return err
+	}
 
-	case "eachlabs":
-		apiKey := os.Getenv("EACHLABS_API_KEY")
-		if apiKey == "" {
-			if eachCfg, ok := cfg.Provider["eachlabs"]; ok {
-				apiKey = eachCfg.APIKey
-			}
-		}
-		if apiKey == "" {
-			fmt.Println("ERROR: EACHLABS_API_KEY not set")
-			fmt.Println("")
-			fmt.Println("Set it via environment variable:")
-			fmt.Println("  export EACHLABS_API_KEY=your-api-key")
-			fmt.Println("")
-			fmt.Println("Get your API key at: https://eachlabs.ai")
-			return fmt.Errorf("each::labs API key required")
-		}
-		var err error
-		prov, err = provider.NewEachLabs(provider.EachLabsConfig{
-			APIKey: apiKey,
-			Model:  model,
-		})
-		if err != nil {
-			return fmt.Errorf("failed to create eachlabs provider: %w", err)
-		}
-
-	default: // anthropic
-		apiKey := os.Getenv("ANTHROPIC_API_KEY")
-		if apiKey == "" {
-			if anthropicCfg, ok := cfg.Provider["anthropic"]; ok {
-				apiKey = anthropicCfg.APIKey
-			}
-		}
-		if apiKey == "" {
-			fmt.Println("ERROR: ANTHROPIC_API_KEY not set")
-			fmt.Println("")
-			fmt.Println("Set it via environment variable:")
-			fmt.Println("  export ANTHROPIC_API_KEY=sk-ant-api03-...")
-			return fmt.Errorf("API key required")
-		}
-		var err error
-		prov, err = provider.NewAnthropic(provider.AnthropicConfig{
-			APIKey: apiKey,
-			Model:  model,
-		})
-		if err != nil {
-			return fmt.Errorf("failed to create provider: %w", err)
+	// Wrap provider with resilience (retry + fallback)
+	provCfg := cfg.Provider[providerName]
+	retryConfig := provider.DefaultRetryConfig()
+	if provCfg.MaxRetries > 0 {
+		retryConfig.MaxRetries = provCfg.MaxRetries
+	}
+	var fallbacks []provider.Provider
+	if provCfg.Fallback != "" {
+		if fbProv := buildFallbackProvider(cfg, provCfg.Fallback); fbProv != nil {
+			fallbacks = append(fallbacks, fbProv)
 		}
 	}
+	prov = provider.NewResilientProvider(provider.ResilientConfig{
+		Primary:   prov,
+		Fallbacks: fallbacks,
+		Retry:     retryConfig,
+	})
 
 	// Get working directory
 	workDir, err := os.Getwd()
@@ -181,8 +138,35 @@ func runChat(cmd *cobra.Command, args []string) error {
 		workDir = "."
 	}
 
-	// Create tools
+	// Create tools, applying per-agent filtering if configured
 	tools := tool.DefaultRegistry(workDir)
+	var agentMaxIterations int
+	var agentApproval []string
+	if chatAgent != "" {
+		if agentCfg, ok := cfg.Agents[chatAgent]; ok {
+			if len(agentCfg.Tools) > 0 {
+				tools = tools.Filter(agentCfg.Tools)
+			}
+			agentMaxIterations = agentCfg.MaxIterations
+			agentApproval = agentCfg.RequireApproval
+		}
+	}
+
+	// Register delegate tool for sub-agent spawning
+	delegateTool := tool.NewDelegateTool(
+		func(ctx context.Context, cfg tool.RunConfig) (string, error) {
+			return agent.RunOnce(ctx, agent.RunOnceConfig{
+				Provider:     cfg.Provider.(provider.Provider),
+				Tools:        cfg.Tools,
+				SystemPrompt: cfg.SystemPrompt,
+				Prompt:       cfg.Prompt,
+				MaxTokens:    cfg.MaxTokens,
+			})
+		},
+		prov,
+		tools,
+	)
+	tools.Register(delegateTool)
 
 	// Create memory
 	mem := memory.NewFileMemory(cfg.WorkspaceDir())
@@ -242,49 +226,54 @@ func runChat(cmd *cobra.Command, args []string) error {
 		cancel()
 	}()
 
+	// Build base agent config
+	baseCfg := agent.Config{
+		Provider:       prov,
+		Tools:          tools,
+		Memory:         mem,
+		SessionManager: sessMgr,
+		InitialHistory: initialHistory,
+		SystemPrompt:   systemPrompt,
+		MaxIterations:  agentMaxIterations,
+		Model:          model,
+		Cost: agent.CostConfig{
+			MaxSessionCost: cfg.Defaults.MaxSessionCost,
+			WarnThreshold:  0.8,
+		},
+	}
+	if len(agentApproval) > 0 {
+		baseCfg.Approval = agent.ApprovalConfig{
+			Enabled:         true,
+			RequireApproval: agentApproval,
+		}
+	}
+
 	// Use simple mode or TUI mode
 	if chatSimple {
-		err := runSimpleChat(ctx, prov, tools, mem, systemPrompt, sessMgr, initialHistory)
+		err := runSimpleChat(ctx, baseCfg)
 		_ = sessMgr.ForceSave()
 		return err
 	}
 
-	tuiErr := runTUIChat(ctx, prov, tools, mem, systemPrompt, sessMgr, initialHistory)
+	tuiErr := runTUIChat(ctx, baseCfg)
 	_ = sessMgr.ForceSave()
 	return tuiErr
 }
 
-func runSimpleChat(ctx context.Context, prov provider.Provider, tools *tool.Registry, mem memory.Memory, systemPrompt string, sessMgr *session.Manager, initialHistory []provider.Message) error {
+func runSimpleChat(ctx context.Context, baseCfg agent.Config) error {
 	// Simple terminal mode
-	term := channel.NewStyledTerminal()
-
-	ag := agent.New(agent.Config{
-		Provider:       prov,
-		Channel:        term,
-		Tools:          tools,
-		Memory:         mem,
-		SessionManager: sessMgr,
-		InitialHistory: initialHistory,
-		SystemPrompt:   systemPrompt,
-	})
-
+	baseCfg.Channel = channel.NewStyledTerminal()
+	ag := agent.New(baseCfg)
 	return ag.Run(ctx)
 }
 
-func runTUIChat(ctx context.Context, prov provider.Provider, tools *tool.Registry, mem memory.Memory, systemPrompt string, sessMgr *session.Manager, initialHistory []provider.Message) error {
+func runTUIChat(ctx context.Context, baseCfg agent.Config) error {
 	// Create TUI channel
 	tuiChan := channel.NewTUIChannel()
 
 	// Create agent
-	ag := agent.New(agent.Config{
-		Provider:       prov,
-		Channel:        tuiChan,
-		Tools:          tools,
-		Memory:         mem,
-		SessionManager: sessMgr,
-		InitialHistory: initialHistory,
-		SystemPrompt:   systemPrompt,
-	})
+	baseCfg.Channel = tuiChan
+	ag := agent.New(baseCfg)
 
 	// Start agent in background
 	go func() {
@@ -393,4 +382,128 @@ Always explain what you're doing and ask for confirmation before installing anyt
 	result += toolDiscoveryPrompt
 
 	return result
+}
+
+// firstCustomProvider returns the name of the first config-defined provider with a base_url,
+// excluding the built-in providers (anthropic, openrouter, eachlabs).
+// This allows auto-detection of custom OpenAI-compatible providers like ollama.
+func firstCustomProvider(cfg *config.Config) string {
+	builtIn := map[string]bool{"anthropic": true, "openrouter": true, "eachlabs": true, "openai": true}
+	for name, provCfg := range cfg.Provider {
+		if builtIn[name] {
+			continue
+		}
+		if provCfg.BaseURL != "" {
+			return name
+		}
+	}
+	return ""
+}
+
+// envKeyForProvider returns the conventional environment variable name for a provider.
+func envKeyForProvider(name string) string {
+	switch name {
+	case "anthropic":
+		return "ANTHROPIC_API_KEY"
+	case "openrouter":
+		return "OPENROUTER_API_KEY"
+	case "eachlabs":
+		return "EACHLABS_API_KEY"
+	case "openai":
+		return "OPENAI_API_KEY"
+	default:
+		return ""
+	}
+}
+
+// resolveAPIKey returns the API key for a provider from config or environment.
+func resolveAPIKey(cfg *config.Config, name string) string {
+	if provCfg, ok := cfg.Provider[name]; ok && provCfg.APIKey != "" {
+		return provCfg.APIKey
+	}
+	if envKey := envKeyForProvider(name); envKey != "" {
+		return os.Getenv(envKey)
+	}
+	return ""
+}
+
+// buildProvider creates a provider by name, using config and environment variables.
+func buildProvider(cfg *config.Config, name, model string) (provider.Provider, error) {
+	provCfg := cfg.Provider[name]
+	apiKey := resolveAPIKey(cfg, name)
+
+	switch name {
+	case "anthropic":
+		if apiKey == "" {
+			fmt.Println("ERROR: ANTHROPIC_API_KEY not set")
+			fmt.Println("")
+			fmt.Println("Set it via environment variable:")
+			fmt.Println("  export ANTHROPIC_API_KEY=sk-ant-api03-...")
+			return nil, fmt.Errorf("API key required")
+		}
+		return provider.NewAnthropic(provider.AnthropicConfig{
+			APIKey:  apiKey,
+			BaseURL: provCfg.BaseURL,
+			Model:   model,
+		})
+
+	case "openrouter":
+		if apiKey == "" {
+			fmt.Println("ERROR: OPENROUTER_API_KEY not set")
+			fmt.Println("")
+			fmt.Println("Get your API key at: https://openrouter.ai")
+			return nil, fmt.Errorf("OpenRouter API key required")
+		}
+		return provider.NewOpenRouter(provider.OpenRouterConfig{
+			APIKey:  apiKey,
+			BaseURL: provCfg.BaseURL,
+			Model:   model,
+		})
+
+	case "eachlabs":
+		if apiKey == "" {
+			fmt.Println("ERROR: EACHLABS_API_KEY not set")
+			fmt.Println("")
+			fmt.Println("Set it via environment variable:")
+			fmt.Println("  export EACHLABS_API_KEY=your-api-key")
+			fmt.Println("")
+			fmt.Println("Get your API key at: https://eachlabs.ai")
+			return nil, fmt.Errorf("each::labs API key required")
+		}
+		return provider.NewEachLabs(provider.EachLabsConfig{
+			APIKey:  apiKey,
+			BaseURL: provCfg.BaseURL,
+			Model:   model,
+		})
+
+	default:
+		// Any other provider name: use OpenAI-compatible provider with base_url from config.
+		// This supports Ollama, LM Studio, vLLM, GLM, Minimax, Together AI, etc.
+		if provCfg.BaseURL == "" {
+			return nil, fmt.Errorf("provider %q requires base_url in config (e.g. [provider.%s] base_url = \"http://localhost:11434/v1\")", name, name)
+		}
+		if model == "" {
+			return nil, fmt.Errorf("provider %q requires a model (set model in config or use --model flag)", name)
+		}
+		return provider.NewOpenAICompat(provider.OpenAICompatConfig{
+			Name:    name,
+			APIKey:  apiKey,
+			BaseURL: provCfg.BaseURL,
+			Model:   model,
+		})
+	}
+}
+
+// buildFallbackProvider creates a provider from config by name, returning nil on failure.
+func buildFallbackProvider(cfg *config.Config, name string) provider.Provider {
+	provCfg, ok := cfg.Provider[name]
+	if !ok {
+		return nil
+	}
+	model := provCfg.Model
+	p, err := buildProvider(cfg, name, model)
+	if err != nil {
+		return nil
+	}
+	return p
 }

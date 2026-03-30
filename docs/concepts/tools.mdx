@@ -44,7 +44,7 @@ When an agent receives a request, it decides which tools to use, calls them with
 
 ## Built-in Tools
 
-klaw includes 11 powerful tools out of the box:
+klaw includes 12 powerful tools out of the box:
 
 ### Command Execution
 
@@ -184,7 +184,7 @@ klaw includes 11 powerful tools out of the box:
 
 <CardGroup cols={2}>
   <Card title="agent_spawn" icon="robot">
-    Create specialized sub-agents.
+    Create persistent agent bindings for the orchestrator.
 
     ```json
     {
@@ -195,6 +195,27 @@ klaw includes 11 powerful tools out of the box:
       }
     }
     ```
+  </Card>
+  <Card title="delegate" icon="users">
+    Spawn an ephemeral sub-agent to handle a task inline. The sub-agent runs
+    independently with its own tool set and returns a text result.
+
+    ```json
+    {
+      "tool": "delegate",
+      "input": {
+        "task": "Read all Go files in /src and summarize the architecture",
+        "tools": ["read", "glob", "grep"]
+      }
+    }
+    ```
+
+    **Features:**
+    - Runs inline — result returned directly to the parent agent
+    - Optional tool allowlist to restrict sub-agent capabilities
+    - Custom system prompt and max tokens per sub-agent
+    - Depth-limited nesting (max 3 levels)
+    - 5-minute timeout, 30k char output truncation
   </Card>
   <Card title="skill" icon="puzzle-piece">
     Install and manage skills.
@@ -377,7 +398,8 @@ Tool results are formatted for LLM consumption:
 |---------|---------|-------------|
 | Tool timeout | 2 minutes | Max execution time per tool |
 | Output limit | 30,000 chars | Truncation threshold |
-| Concurrent tools | 1 | Tools execute sequentially |
+| Concurrent tools | All | Approved tools execute in parallel |
+| Delegate timeout | 5 minutes | Max execution time for sub-agents |
 
 Override in config:
 

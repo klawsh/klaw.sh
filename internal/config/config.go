@@ -12,14 +12,48 @@ import (
 
 // Config represents the klaw configuration.
 type Config struct {
-	Defaults     DefaultsConfig            `toml:"defaults"`
-	Workspace    WorkspaceConfig           `toml:"workspace"`
-	Provider     map[string]ProviderConfig `toml:"provider"`
-	Channel      map[string]ChannelConfig  `toml:"channel"`
-	Server       ServerConfig              `toml:"server"`
-	Controller   *ControllerConfig         `toml:"controller"`
-	Logging      LoggingConfig             `toml:"logging"`
-	SkillsAPIKey string                    `toml:"skills_api_key"`
+	Defaults     DefaultsConfig                   `toml:"defaults"`
+	Workspace    WorkspaceConfig                  `toml:"workspace"`
+	Provider     map[string]ProviderConfig        `toml:"provider"`
+	Channel      map[string]ChannelConfig         `toml:"channel"`
+	Agents       map[string]AgentInstanceConfig   `toml:"agent"`
+	Server       ServerConfig                     `toml:"server"`
+	OpenAI       OpenAIConfig                     `toml:"openai"`
+	Controller   *ControllerConfig                `toml:"controller"`
+	Logging      LoggingConfig                    `toml:"logging"`
+	SkillsAPIKey string                           `toml:"skills_api_key"`
+}
+
+// OpenAIConfig holds OpenAI-compatible gateway settings.
+type OpenAIConfig struct {
+	Enabled       bool                       `toml:"enabled"`
+	AuthRequired  bool                       `toml:"auth_required"`
+	APIKeys       []string                   `toml:"api_keys"`
+	DefaultModel  string                     `toml:"default_model"`
+	Models        map[string]OpenAIModelMap  `toml:"models"`
+	CORSOrigins   []string                   `toml:"cors_origins"`
+	MaxConcurrent int                        `toml:"max_concurrent"`
+	SkillSources  []SkillSource              `toml:"skill_sources"` // additional repos to install skills from
+}
+
+// OpenAIModelMap maps an OpenAI model ID to a klaw agent and provider.
+type OpenAIModelMap struct {
+	Agent    string   `toml:"agent"`
+	Provider string   `toml:"provider"`
+	Skills   []string `toml:"skills"` // skill names to load; "all" = all installed; empty = all
+}
+
+// SkillSource defines an additional GitHub repo to install skills from.
+type SkillSource struct {
+	Repo   string   `toml:"repo"`   // GitHub URL, e.g. https://github.com/org/repo
+	Skills []string `toml:"skills"` // specific skill names, or ["all"]
+}
+
+// AgentInstanceConfig holds per-agent configuration.
+type AgentInstanceConfig struct {
+	Tools           []string `toml:"tools"`
+	MaxIterations   int      `toml:"max_iterations"`
+	RequireApproval []string `toml:"require_approval"`
 }
 
 // ControllerConfig holds controller connection settings.
@@ -30,8 +64,9 @@ type ControllerConfig struct {
 
 // DefaultsConfig holds default settings.
 type DefaultsConfig struct {
-	Model string `toml:"model"`
-	Agent string `toml:"agent"`
+	Model          string  `toml:"model"`
+	Agent          string  `toml:"agent"`
+	MaxSessionCost float64 `toml:"max_session_cost"`
 }
 
 // WorkspaceConfig holds workspace settings.
@@ -41,9 +76,11 @@ type WorkspaceConfig struct {
 
 // ProviderConfig holds LLM provider settings.
 type ProviderConfig struct {
-	APIKey  string `toml:"api_key"`
-	BaseURL string `toml:"base_url"`
-	Model   string `toml:"model"`
+	APIKey     string `toml:"api_key"`
+	BaseURL    string `toml:"base_url"`
+	Model      string `toml:"model"`
+	MaxRetries int    `toml:"max_retries"`
+	Fallback   string `toml:"fallback"`
 }
 
 // ChannelConfig holds channel settings.
@@ -137,6 +174,7 @@ func defaultConfig() *Config {
 		},
 		Provider: make(map[string]ProviderConfig),
 		Channel:  make(map[string]ChannelConfig),
+		Agents:   make(map[string]AgentInstanceConfig),
 		Server: ServerConfig{
 			Port: 8080,
 			Host: "127.0.0.1",

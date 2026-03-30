@@ -64,7 +64,8 @@
         "guides/slack-integration",
         "guides/custom-tools",
         "guides/multi-agent-workflows",
-        "guides/distributed-deployment"
+        "guides/distributed-deployment",
+        "guides/cost-and-safety"
       ]
     },
     {
@@ -78,6 +79,7 @@
       "pages": [
         "architecture/overview",
         "architecture/agent-loop",
+        "architecture/resilience",
         "architecture/distributed-mode",
         "architecture/namespaces-clusters"
       ]

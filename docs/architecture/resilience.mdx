@@ -1,0 +1,240 @@
+---
+title: Resilience
+description: 'Provider retry, fallback, context management, and error handling'
+---
+
+## Overview
+
+klaw is designed to handle failures gracefully. This page covers the resilience mechanisms built into the provider layer, context management, structured error handling, and observability.
+
+## Provider Retry
+
+When an LLM API call fails with a retryable error, klaw automatically retries with exponential backoff and jitter.
+
+### Retry Flow
+
+```
+Request ──→ Provider API
+              │
+              ├── Success ──→ Return response
+              │
+              ├── Retryable error ──→ Wait (backoff + jitter)
+              │                          │
+              │                          └──→ Retry (up to max_retries)
+              │                                  │
+              │                                  ├── Success ──→ Return
+              │                                  └── Exhausted ──→ Try fallback
+              │
+              └── Non-retryable error ──→ Return error immediately
+```
+
+### Backoff Calculation
+
+```
+backoff = initial_backoff * (backoff_factor ^ attempt) + jitter
+```
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `initial_backoff` | 1s | Starting delay |
+| `backoff_factor` | 2.0 | Exponential multiplier |
+| `max_backoff` | 30s | Maximum delay cap |
+| `jitter` | 0-25% | Random addition to prevent thundering herd |
+
+**Example progression** (3 retries):
+1. Attempt 1: ~1s wait (1s + jitter)
+2. Attempt 2: ~2s wait (2s + jitter)
+3. Attempt 3: ~4s wait (4s + jitter)
+
+### Retryable Errors
+
+| Error | Description |
+|-------|-------------|
+| HTTP 429 | Rate limit exceeded |
+| HTTP 500 | Internal server error |
+| HTTP 502 | Bad gateway |
+| HTTP 503 | Service unavailable |
+| HTTP 529 | Overloaded |
+| `timeout` / `timed out` | Request timeout |
+| `connection reset` | Connection dropped |
+| `connection refused` | Server unavailable |
+| `EOF` | Unexpected disconnect |
+
+All other errors (e.g., HTTP 400, 401, 403) fail immediately without retry.
+
+## Fallback Chain
+
+When retries are exhausted on the primary provider, klaw tries fallback providers in order:
+
+```
+Primary (anthropic)
+  │ retries exhausted
+  ▼
+Fallback 1 (openrouter)
+  │ retries exhausted
+  ▼
+Fallback 2 (eachlabs)
+  │ retries exhausted
+  ▼
+Return error
+```
+
+### Configuration
+
+```toml
+[provider.anthropic]
+api_key = "${ANTHROPIC_API_KEY}"
+model = "claude-sonnet-4-20250514"
+max_retries = 3
+fallback = "openrouter"
+
+[provider.openrouter]
+api_key = "${OPENROUTER_API_KEY}"
+model = "anthropic/claude-sonnet-4"
+max_retries = 2
+```
+
+Each fallback provider uses its own retry configuration independently.
+
+## Context Window Compaction
+
+When conversation history approaches the context window limit, klaw automatically compacts it via LLM-based summarization.
+
+### Compaction Lifecycle
+
+```
+Message history grows
+         │
+         ▼
+Token estimate > (max_tokens - reserve) * threshold?
+         │
+    ┌────┴────┐
+    │ No      │ Yes
+    │         ▼
+    │    Keep first user message (verbatim)
+    │    Keep last 6 messages (verbatim)
+    │    Summarize middle via LLM call
+    │    Replace middle with summary
+    │         │
+    └────┬────┘
+         ▼
+Continue with compacted history
+```
+
+### Configuration
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `MaxContextTokens` | 200,000 | Maximum context window size |
+| `CompactionThreshold` | 0.75 | Fraction of available tokens that triggers compaction |
+| `ReserveTokens` | 8,192 | Tokens reserved for the LLM response |
+
+**Trigger point**: Compaction occurs when estimated tokens exceed `(200,000 - 8,192) * 0.75 ≈ 143,856 tokens`.
+
+Token estimation uses a ~4 characters per token heuristic. The summarized section is prefixed with `[Previous conversation summary]`.
+
+## Structured Errors
+
+All agent errors use the `AgentError` type with machine-readable codes:
+
+```go
+type AgentError struct {
+    Code    ErrorCode
+    Message string
+    Cause   error
+}
+```
+
+### Error Codes
+
+| Code | Constant | Trigger |
+|------|----------|---------|
+| `max_iterations` | `ErrMaxIterations` | Agent loop exceeded iteration limit |
+| `provider_error` | `ErrProvider` | LLM API failure after retries and fallbacks |
+| `tool_execution` | `ErrToolExec` | Tool returned an error |
+| `context_limit` | `ErrContextLimit` | Context window exceeded after compaction |
+| `budget_exceeded` | `ErrBudgetExceed` | Session cost exceeded `max_session_cost` |
+
+### Error Format
+
+Errors serialize as `[CODE] message: cause`:
+
+```
+[budget_exceeded] session cost $5.12 exceeds limit $5.00
+[max_iterations] reached 50 iterations without completion
+[provider_error] anthropic API error: rate limit exceeded
+```
+
+Errors implement `Unwrap()` for Go error chain inspection.
+
+## Observability
+
+### Structured Logging
+
+klaw uses Go's `slog` package for structured JSON logging:
+
+```toml
+[logging]
+level = "info"
+file = "~/.klaw/logs/klaw.log"
+format = "json"
+```
+
+Example log entries:
+
+```json
+{"level":"DEBUG","msg":"provider response","model":"claude-sonnet-4-20250514","input_tokens":1523,"output_tokens":847,"cost":"$0.014"}
+{"level":"WARN","msg":"approaching budget limit","session_cost":4.12,"max_session_cost":5.00}
+{"level":"ERROR","msg":"provider request failed","error":"HTTP 429","attempt":2,"backoff":"2.3s"}
+```
+
+### Metrics
+
+Global and per-session metrics are tracked using atomic counters:
+
+**Global Metrics:**
+
+| Counter | Description |
+|---------|-------------|
+| `TotalInputTokens` | Cumulative input tokens |
+| `TotalOutputTokens` | Cumulative output tokens |
+| `TotalRequests` | Total LLM API requests |
+| `TotalErrors` | Total error occurrences |
+| `TotalToolCalls` | Total tool invocations |
+
+**Per-Session Metrics:**
+
+| Field | Description |
+|-------|-------------|
+| `InputTokens` | Session input tokens |
+| `OutputTokens` | Session output tokens |
+| `Requests` | Session request count |
+| `Errors` | Session error count |
+| `ToolCalls` | Per-tool call counts (map) |
+| `StartedAt` | Session start timestamp |
+
+Metrics are recorded via:
+- `RecordRequest(sessionID, inputTokens, outputTokens)` — after each LLM call
+- `RecordToolCall(sessionID, toolName)` — after each tool execution
+- `RecordError(sessionID, errorCode)` — on any error
+
+Use `metrics.Summary()` to get a snapshot of all global counters.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Agent Loop"
+    icon="rotate"
+    href="/architecture/agent-loop"
+  >
+    How these mechanisms fit into the execution cycle
+  </Card>
+  <Card
+    title="Cost & Safety Guide"
+    icon="coins"
+    href="/guides/cost-and-safety"
+  >
+    Practical guide to configuring safety features
+  </Card>
+</CardGroup>

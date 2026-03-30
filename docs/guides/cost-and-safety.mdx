@@ -1,0 +1,233 @@
+---
+title: Cost & Safety
+description: 'Managing costs, approvals, and resilience in klaw'
+---
+
+## Overview
+
+klaw provides several mechanisms to control costs, enforce safety boundaries, and maintain reliability. This guide covers setting up cost budgets, tool approval gates, provider resilience, monitoring, and per-agent restrictions.
+
+## Cost Budgets
+
+### Setting a Session Budget
+
+Add `max_session_cost` to your defaults configuration to cap spending per session:
+
+```toml
+[defaults]
+model = "claude-sonnet-4-20250514"
+max_session_cost = 5.00  # USD per session
+```
+
+When the accumulated cost reaches this limit, the agent stops with a `budget_exceeded` error. A warning is logged when cost reaches 80% of the budget.
+
+### How Cost is Calculated
+
+klaw tracks input and output tokens for every LLM call and multiplies by per-model pricing:
+
+```
+cost = (input_tokens / 1,000,000 * input_price) + (output_tokens / 1,000,000 * output_price)
+```
+
+Built-in pricing for common models:
+
+| Model | Input (per 1M tokens) | Output (per 1M tokens) |
+|-------|----------------------|------------------------|
+| `claude-sonnet-4-20250514` | $3.00 | $15.00 |
+| `claude-opus-4-20250514` | $15.00 | $75.00 |
+| `claude-3-5-haiku-20241022` | $0.80 | $4.00 |
+| `openai/gpt-4o` | $2.50 | $10.00 |
+| `deepseek/deepseek-chat` | $0.14 | $0.28 |
+
+Unknown models default to $3.00 input / $15.00 output per million tokens.
+
+### Tips for Cost Control
+
+<AccordionGroup>
+  <Accordion icon="gauge" title="Start with conservative budgets">
+    Begin with `max_session_cost = 2.00` for interactive sessions and increase as needed. For automated pipelines, set higher limits but always have a cap.
+  </Accordion>
+  <Accordion icon="list-check" title="Use iteration limits">
+    Combine cost budgets with `max_iterations` to prevent runaway loops:
+    ```toml
+    [agent.default]
+    max_iterations = 30
+    ```
+  </Accordion>
+  <Accordion icon="brain" title="Choose the right model">
+    Use Haiku ($0.80/1M input) for simple tasks like routing, Sonnet ($3/1M) for most work, and Opus ($15/1M) only for complex reasoning.
+  </Accordion>
+</AccordionGroup>
+
+## Tool Approval
+
+### Configuring Approval Gates
+
+Require user confirmation before specific tools execute:
+
+```toml
+[agent.default]
+require_approval = ["bash", "write"]
+```
+
+When the agent tries to use an approved tool, the user sees:
+
+```
+⚠ Tool 'bash' requires approval. Execute? [y/N]:
+```
+
+- Type `y` or `yes` to approve
+- Any other response (or Enter) denies execution
+- Denied tools return "Denied by user" to the LLM, which can adjust its approach
+
+### Which Tools to Gate
+
+| Risk Level | Tools | Recommendation |
+|------------|-------|----------------|
+| High | `bash` | Always require approval for untrusted tasks |
+| Medium | `write`, `edit` | Require approval when agents modify important files |
+| Low | `read`, `glob`, `grep` | Usually safe to allow freely |
+| Low | `web_fetch`, `web_search` | Safe for research agents |
+
+## Provider Resilience
+
+### Retry Configuration
+
+Each provider retries failed requests with exponential backoff:
+
+```toml
+[provider.anthropic]
+api_key = "${ANTHROPIC_API_KEY}"
+model = "claude-sonnet-4-20250514"
+max_retries = 3
+```
+
+Retry behavior:
+- **Backoff**: Starts at 1s, doubles each attempt, caps at 30s
+- **Jitter**: Random 0-25% added to prevent thundering herd
+- **Retryable errors**: HTTP 429 (rate limit), 500, 502, 503, timeouts, connection resets
+
+### Fallback Providers
+
+Chain providers so failures on one automatically route to another:
+
+```toml
+[provider.anthropic]
+api_key = "${ANTHROPIC_API_KEY}"
+model = "claude-sonnet-4-20250514"
+max_retries = 3
+fallback = "openrouter"
+
+[provider.openrouter]
+api_key = "${OPENROUTER_API_KEY}"
+model = "anthropic/claude-sonnet-4"
+max_retries = 2
+```
+
+The flow is: try primary with retries → exhaust retries → try fallback with its own retries.
+
+## Monitoring
+
+### Structured Logging
+
+Enable JSON-formatted logs for production monitoring:
+
+```toml
+[logging]
+level = "info"
+file = "~/.klaw/logs/klaw.log"
+format = "json"
+```
+
+Log entries include structured fields:
+
+```json
+{
+  "level": "DEBUG",
+  "msg": "provider response",
+  "model": "claude-sonnet-4-20250514",
+  "input_tokens": 1523,
+  "output_tokens": 847,
+  "cost": "$0.014"
+}
+```
+
+### Metrics
+
+klaw tracks metrics globally and per-session:
+
+| Metric | Scope | Description |
+|--------|-------|-------------|
+| `TotalInputTokens` | Global | Cumulative input tokens across all sessions |
+| `TotalOutputTokens` | Global | Cumulative output tokens |
+| `TotalRequests` | Global | Total LLM API requests |
+| `TotalErrors` | Global | Total error count |
+| `TotalToolCalls` | Global | Total tool invocations |
+| `ToolCalls` | Per-session | Per-tool call counts within a session |
+
+## Per-Agent Restrictions
+
+### Tool Filtering
+
+Restrict which tools an agent can access:
+
+```toml
+# Research agent: read-only tools
+[agent.researcher]
+tools = ["read", "glob", "grep", "web_fetch", "web_search"]
+
+# Coder agent: file modification tools
+[agent.coder]
+tools = ["bash", "read", "write", "edit", "glob", "grep"]
+```
+
+When `tools` is omitted, the agent has access to all registered tools. When specified, only listed tools are available.
+
+### Combining Safety Features
+
+For maximum control, combine multiple safety mechanisms:
+
+```toml
+[defaults]
+max_session_cost = 10.00
+
+[agent.default]
+tools = ["bash", "read", "write", "edit", "glob", "grep", "web_fetch", "web_search"]
+max_iterations = 50
+require_approval = ["bash"]
+
+[agent.researcher]
+tools = ["read", "glob", "grep", "web_fetch", "web_search"]
+max_iterations = 30
+
+[provider.anthropic]
+api_key = "${ANTHROPIC_API_KEY}"
+model = "claude-sonnet-4-20250514"
+max_retries = 3
+fallback = "openrouter"
+```
+
+This configuration:
+- Caps session cost at $10
+- Limits the default agent to 50 iterations with bash approval
+- Gives the researcher agent only read-only tools with 30 iterations
+- Retries Anthropic API calls 3 times then falls back to OpenRouter
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Configuration"
+    icon="gear"
+    href="/configuration/overview"
+  >
+    Full configuration reference
+  </Card>
+  <Card
+    title="Resilience Architecture"
+    icon="shield-halved"
+    href="/architecture/resilience"
+  >
+    Deep dive into retry, fallback, and error handling
+  </Card>
+</CardGroup>

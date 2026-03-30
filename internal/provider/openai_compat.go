@@ -9,65 +9,66 @@ import (
 	"github.com/openai/openai-go/option"
 )
 
-// OpenRouterProvider implements the Provider interface using OpenRouter.
-type OpenRouterProvider struct {
+// OpenAICompatProvider implements the Provider interface for any OpenAI-compatible API.
+// This works with Ollama, LM Studio, vLLM, GLM, Minimax, Together AI, and any other
+// service that exposes an OpenAI-compatible /v1/chat/completions endpoint.
+type OpenAICompatProvider struct {
 	client *openai.Client
 	model  string
+	name   string
 }
 
-// OpenRouterConfig holds configuration for the OpenRouter provider.
-type OpenRouterConfig struct {
-	APIKey  string
-	BaseURL string
-	Model   string
+// OpenAICompatConfig holds configuration for a generic OpenAI-compatible provider.
+type OpenAICompatConfig struct {
+	Name    string // provider name for display (e.g., "ollama", "openai")
+	APIKey  string // optional — some local providers don't require auth
+	BaseURL string // required — e.g., "http://localhost:11434/v1"
+	Model   string // required — e.g., "llama3.2", "gpt-4o"
 }
 
-// NewOpenRouter creates a new OpenRouter provider.
-func NewOpenRouter(cfg OpenRouterConfig) (*OpenRouterProvider, error) {
-	if cfg.APIKey == "" {
-		return nil, fmt.Errorf("OPENROUTER_API_KEY is required")
+// NewOpenAICompat creates a new OpenAI-compatible provider.
+func NewOpenAICompat(cfg OpenAICompatConfig) (*OpenAICompatProvider, error) {
+	if cfg.BaseURL == "" {
+		return nil, fmt.Errorf("base_url is required for provider %q", cfg.Name)
+	}
+	if cfg.Model == "" {
+		return nil, fmt.Errorf("model is required for provider %q", cfg.Name)
 	}
 
-	baseURL := cfg.BaseURL
-	if baseURL == "" {
-		baseURL = "https://openrouter.ai/api/v1"
+	name := cfg.Name
+	if name == "" {
+		name = "openai-compatible"
 	}
 
-	client := openai.NewClient(
-		option.WithAPIKey(cfg.APIKey),
-		option.WithBaseURL(baseURL),
-	)
-
-	model := cfg.Model
-	if model == "" {
-		model = "anthropic/claude-sonnet-4" // Default model
+	opts := []option.RequestOption{
+		option.WithBaseURL(cfg.BaseURL),
+	}
+	if cfg.APIKey != "" {
+		opts = append(opts, option.WithAPIKey(cfg.APIKey))
+	} else {
+		// Some local providers (Ollama, LM Studio) don't need an API key
+		opts = append(opts, option.WithAPIKey("not-needed"))
 	}
 
-	return &OpenRouterProvider{
+	client := openai.NewClient(opts...)
+
+	return &OpenAICompatProvider{
 		client: &client,
-		model:  model,
+		model:  cfg.Model,
+		name:   name,
 	}, nil
 }
 
-func (p *OpenRouterProvider) Name() string {
-	return "openrouter"
+func (p *OpenAICompatProvider) Name() string {
+	return p.name
 }
 
-func (p *OpenRouterProvider) Models() []string {
-	return []string{
-		"anthropic/claude-sonnet-4",
-		"anthropic/claude-opus-4",
-		"anthropic/claude-3.5-sonnet",
-		"openai/gpt-4o",
-		"openai/gpt-4o-mini",
-		"google/gemini-2.0-flash-exp",
-		"deepseek/deepseek-chat",
-		"meta-llama/llama-3.3-70b-instruct",
-	}
+func (p *OpenAICompatProvider) Models() []string {
+	return []string{p.model}
 }
 
 // Chat sends a non-streaming request.
-func (p *OpenRouterProvider) Chat(ctx context.Context, req *ChatRequest) (*ChatResponse, error) {
+func (p *OpenAICompatProvider) Chat(ctx context.Context, req *ChatRequest) (*ChatResponse, error) {
 	messages := p.buildMessages(req)
 	tools := p.buildTools(req.Tools)
 
@@ -88,14 +89,14 @@ func (p *OpenRouterProvider) Chat(ctx context.Context, req *ChatRequest) (*ChatR
 
 	resp, err := p.client.Chat.Completions.New(ctx, params)
 	if err != nil {
-		return nil, fmt.Errorf("openrouter chat failed: %w", err)
+		return nil, fmt.Errorf("%s chat failed: %w", p.name, err)
 	}
 
 	return p.parseResponse(resp), nil
 }
 
 // Stream sends a request and emits events.
-func (p *OpenRouterProvider) Stream(ctx context.Context, req *ChatRequest) (<-chan StreamEvent, error) {
+func (p *OpenAICompatProvider) Stream(ctx context.Context, req *ChatRequest) (<-chan StreamEvent, error) {
 	events := make(chan StreamEvent, 100)
 
 	go func() {
@@ -131,7 +132,7 @@ func (p *OpenRouterProvider) Stream(ctx context.Context, req *ChatRequest) (<-ch
 	return events, nil
 }
 
-func (p *OpenRouterProvider) buildMessages(req *ChatRequest) []openai.ChatCompletionMessageParamUnion {
+func (p *OpenAICompatProvider) buildMessages(req *ChatRequest) []openai.ChatCompletionMessageParamUnion {
 	var messages []openai.ChatCompletionMessageParamUnion
 
 	if req.System != "" {
@@ -148,7 +149,6 @@ func (p *OpenRouterProvider) buildMessages(req *ChatRequest) []openai.ChatComple
 			}
 		case "assistant":
 			if len(msg.ToolCalls) > 0 {
-				// Build tool calls array for OpenAI format
 				toolCalls := make([]openai.ChatCompletionMessageToolCallParam, len(msg.ToolCalls))
 				for i, tc := range msg.ToolCalls {
 					toolCalls[i] = openai.ChatCompletionMessageToolCallParam{
@@ -159,7 +159,6 @@ func (p *OpenRouterProvider) buildMessages(req *ChatRequest) []openai.ChatComple
 						},
 					}
 				}
-				// Create assistant message with tool calls
 				assistant := openai.ChatCompletionAssistantMessageParam{
 					ToolCalls: toolCalls,
 				}
@@ -174,7 +173,7 @@ func (p *OpenRouterProvider) buildMessages(req *ChatRequest) []openai.ChatComple
 	return messages
 }
 
-func (p *OpenRouterProvider) buildTools(tools []ToolDefinition) []openai.ChatCompletionToolParam {
+func (p *OpenAICompatProvider) buildTools(tools []ToolDefinition) []openai.ChatCompletionToolParam {
 	var result []openai.ChatCompletionToolParam
 
 	for _, t := range tools {
@@ -195,7 +194,7 @@ func (p *OpenRouterProvider) buildTools(tools []ToolDefinition) []openai.ChatCom
 	return result
 }
 
-func (p *OpenRouterProvider) parseResponse(resp *openai.ChatCompletion) *ChatResponse {
+func (p *OpenAICompatProvider) parseResponse(resp *openai.ChatCompletion) *ChatResponse {
 	result := &ChatResponse{
 		StopReason: "end_turn",
 	}

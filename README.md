@@ -386,6 +386,42 @@ enabled = true
 timezone = "America/New_York"
 ```
 
+### Custom Provider (OpenAI-Compatible)
+
+Any OpenAI-compatible API can be used as a provider by setting `base_url` and `model` in config.
+This works with Ollama, LM Studio, vLLM, GLM, Minimax, Together AI, and more.
+
+```toml
+# Ollama (local)
+[provider.ollama]
+base_url = "http://localhost:11434/v1"
+model = "llama3.2"
+
+# LM Studio (local)
+[provider.lmstudio]
+base_url = "http://localhost:1234/v1"
+model = "qwen2.5-coder-32b"
+
+# Together AI
+[provider.together]
+api_key = "your-api-key"
+base_url = "https://api.together.xyz/v1"
+model = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
+
+# Any OpenAI-compatible endpoint
+[provider.custom]
+api_key = "your-api-key"
+base_url = "https://your-endpoint.com/v1"
+model = "your-model-name"
+```
+
+Then use it with:
+```bash
+klaw chat -p ollama
+klaw chat -p lmstudio
+klaw chat -p together
+```
+
 ---
 
 ## FAQ

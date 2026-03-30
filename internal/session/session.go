@@ -19,16 +19,19 @@ import (
 
 // Session represents a persistent chat session.
 type Session struct {
-	ID           string             `json:"id"`
-	Name         string             `json:"name,omitempty"`
-	Model        string             `json:"model"`
-	Provider     string             `json:"provider"`
-	Agent        string             `json:"agent,omitempty"`
-	SystemPrompt string             `json:"system_prompt,omitempty"`
-	WorkDir      string             `json:"work_dir,omitempty"`
-	Messages     []provider.Message `json:"messages"`
-	CreatedAt    time.Time          `json:"created_at"`
-	UpdatedAt    time.Time          `json:"updated_at"`
+	ID                string             `json:"id"`
+	Name              string             `json:"name,omitempty"`
+	Model             string             `json:"model"`
+	Provider          string             `json:"provider"`
+	Agent             string             `json:"agent,omitempty"`
+	SystemPrompt      string             `json:"system_prompt,omitempty"`
+	WorkDir           string             `json:"work_dir,omitempty"`
+	Messages          []provider.Message `json:"messages"`
+	TotalInputTokens  int                `json:"total_input_tokens,omitempty"`
+	TotalOutputTokens int                `json:"total_output_tokens,omitempty"`
+	TotalCost         float64            `json:"total_cost,omitempty"`
+	CreatedAt         time.Time          `json:"created_at"`
+	UpdatedAt         time.Time          `json:"updated_at"`
 }
 
 // Manager handles session persistence with debounced saving.
