@@ -79,8 +79,8 @@ Output ONLY the system prompt content, no explanations or meta-commentary.`, cfg
 func DefaultBootstrap(cfg BootstrapConfig) string {
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("# %s\n\n", cfg.Name))
-	sb.WriteString(fmt.Sprintf("## Role\n%s\n\n", cfg.Description))
+	_, _ = fmt.Fprintf(&sb, "# %s\n\n", cfg.Name)
+	_, _ = fmt.Fprintf(&sb, "## Role\n%s\n\n", cfg.Description)
 
 	sb.WriteString("## Guidelines\n")
 	sb.WriteString("- Be helpful, accurate, and concise\n")
@@ -91,7 +91,7 @@ func DefaultBootstrap(cfg BootstrapConfig) string {
 	if len(cfg.Skills) > 0 {
 		sb.WriteString("## Skills\n")
 		for _, skill := range cfg.Skills {
-			sb.WriteString(fmt.Sprintf("- **%s**\n", skill))
+			_, _ = fmt.Fprintf(&sb, "- **%s**\n", skill)
 		}
 		sb.WriteString("\n")
 	}
@@ -99,7 +99,7 @@ func DefaultBootstrap(cfg BootstrapConfig) string {
 	if len(cfg.Tools) > 0 {
 		sb.WriteString("## Available Tools\n")
 		for _, tool := range cfg.Tools {
-			sb.WriteString(fmt.Sprintf("- `%s`\n", tool))
+			_, _ = fmt.Fprintf(&sb, "- `%s`\n", tool)
 		}
 		sb.WriteString("\n")
 	}

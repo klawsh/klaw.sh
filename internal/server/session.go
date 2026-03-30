@@ -30,7 +30,7 @@ type sessionPool struct {
 
 func newSessionPool() *sessionPool {
 	dir := filepath.Join(config.StateDir(), "sessions", "http")
-	os.MkdirAll(dir, 0755)
+	_ = os.MkdirAll(dir, 0755)
 	return &sessionPool{
 		sessions: make(map[string]*session),
 		dir:      dir,
@@ -60,7 +60,7 @@ func (sp *sessionPool) get(id string) *session {
 	}
 
 	// Create session directory and files subdirectory
-	os.MkdirAll(s.filesDir(), 0755)
+	_ = os.MkdirAll(s.filesDir(), 0755)
 
 	// Try to load from disk
 	s.load()
@@ -98,9 +98,9 @@ func (s *session) load() {
 		}
 		// Migrate: save to new location and remove legacy file
 		if json.Unmarshal(data, &s.history) == nil {
-			os.MkdirAll(s.sessionDir(), 0755)
-			s.save()
-			os.Remove(legacyPath)
+			_ = os.MkdirAll(s.sessionDir(), 0755)
+			_ = s.save()
+			_ = os.Remove(legacyPath)
 			return
 		}
 	}
@@ -111,7 +111,7 @@ func (s *session) load() {
 
 // save writes session history to disk.
 func (s *session) save() error {
-	os.MkdirAll(s.sessionDir(), 0755)
+	_ = os.MkdirAll(s.sessionDir(), 0755)
 	data, err := json.Marshal(s.history)
 	if err != nil {
 		return err

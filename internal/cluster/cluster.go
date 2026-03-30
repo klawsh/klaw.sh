@@ -168,7 +168,7 @@ func (s *Store) DeleteCluster(name string) error {
 	// Delete all namespaces first
 	namespaces, _ := s.ListNamespaces(name)
 	for _, ns := range namespaces {
-		s.DeleteNamespace(name, ns.Name)
+		_ = s.DeleteNamespace(name, ns.Name)
 	}
 
 	// Delete cluster file
@@ -178,7 +178,7 @@ func (s *Store) DeleteCluster(name string) error {
 
 	// Remove cluster directory
 	clusterDir := filepath.Join(s.baseDir, "namespaces", name)
-	os.RemoveAll(clusterDir)
+	_ = os.RemoveAll(clusterDir)
 
 	return nil
 }
@@ -277,7 +277,7 @@ func (s *Store) DeleteNamespace(cluster, name string) error {
 	// Delete all channel bindings in namespace
 	bindings, _ := s.ListChannelBindings(cluster, name)
 	for _, b := range bindings {
-		s.DeleteChannelBinding(cluster, name, b.Name)
+		_ = s.DeleteChannelBinding(cluster, name, b.Name)
 	}
 
 	return os.Remove(s.namespaceFile(cluster, name))
@@ -564,7 +564,7 @@ func (s *Store) AppendMessageLog(cluster, namespace, channel string, msg *Messag
 
 	data, err := os.ReadFile(logPath)
 	if err == nil {
-		json.Unmarshal(data, &logs)
+		_ = json.Unmarshal(data, &logs)
 	}
 
 	logs = append(logs, msg)

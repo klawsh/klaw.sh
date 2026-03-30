@@ -73,7 +73,7 @@ func runLogin(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to connect to Klaw Skills: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("failed to get device code (HTTP %d)", resp.StatusCode)
@@ -124,10 +124,10 @@ func runLogin(cmd *cobra.Command, args []string) error {
 
 		var poll pollResponse
 		if err := json.NewDecoder(pollResp.Body).Decode(&poll); err != nil {
-			pollResp.Body.Close()
+			_ = pollResp.Body.Close()
 			continue
 		}
-		pollResp.Body.Close()
+		_ = pollResp.Body.Close()
 
 		switch poll.Status {
 		case "authorized":
@@ -208,7 +208,7 @@ func runWhoami(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to fetch user info: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusUnauthorized {
 		fmt.Println("Session expired. Please run 'klaw login' again.")

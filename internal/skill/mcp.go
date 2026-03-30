@@ -107,13 +107,13 @@ func (c *MCPClient) Start(ctx context.Context) error {
 
 	// Initialize the connection
 	if err := c.initialize(); err != nil {
-		c.Stop()
+		_ = c.Stop()
 		return fmt.Errorf("failed to initialize MCP connection: %w", err)
 	}
 
 	// Fetch available tools
 	if err := c.fetchTools(); err != nil {
-		c.Stop()
+		_ = c.Stop()
 		return fmt.Errorf("failed to fetch tools: %w", err)
 	}
 
@@ -132,12 +132,12 @@ func (c *MCPClient) Stop() error {
 	c.running = false
 
 	if c.stdin != nil {
-		c.stdin.Close()
+		_ = c.stdin.Close()
 	}
 
 	if c.cmd != nil && c.cmd.Process != nil {
-		c.cmd.Process.Kill()
-		c.cmd.Wait()
+		_ = c.cmd.Process.Kill()
+		_ = c.cmd.Wait()
 	}
 
 	return nil
@@ -158,7 +158,7 @@ func (c *MCPClient) initialize() error {
 	}
 
 	// Send initialized notification
-	c.notify("notifications/initialized", nil)
+	_ = c.notify("notifications/initialized", nil)
 
 	_ = resp // We could parse server capabilities here
 	return nil
@@ -394,7 +394,7 @@ func (m *MCPManager) StopAll() {
 	defer m.mu.Unlock()
 
 	for _, client := range m.clients {
-		client.Stop()
+		_ = client.Stop()
 	}
 	m.clients = make(map[string]*MCPClient)
 }

@@ -47,7 +47,7 @@ The image is required before running agents.`,
 			cwd, _ := os.Getwd()
 			containerfile = filepath.Join(cwd, "Containerfile")
 			if _, err := os.Stat(containerfile); os.IsNotExist(err) {
-				return fmt.Errorf("Containerfile not found. Run from klaw source directory.")
+				return fmt.Errorf("containerfile not found, run from klaw source directory")
 			}
 			srcDir = cwd
 		}
@@ -209,10 +209,10 @@ var psCmd = &cobra.Command{
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "CONTAINER ID\tNAME\tAGENT\tSTATUS\tAGE")
+		_, _ = fmt.Fprintln(w, "CONTAINER ID\tNAME\tAGENT\tSTATUS\tAGE")
 		for _, c := range containers {
 			age := time.Since(c.StartedAt).Round(time.Second).String()
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", c.ID, c.Name, c.AgentName, c.Status, age)
+			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", c.ID, c.Name, c.AgentName, c.Status, age)
 		}
 		return w.Flush()
 	},
@@ -301,19 +301,4 @@ func init() {
 
 	// Exec for containers
 	rootCmd.AddCommand(containerExecCmd)
-}
-
-// Helper to get relative time
-func relativeTime(t time.Time) string {
-	d := time.Since(t)
-	if d < time.Minute {
-		return fmt.Sprintf("%ds", int(d.Seconds()))
-	}
-	if d < time.Hour {
-		return fmt.Sprintf("%dm", int(d.Minutes()))
-	}
-	if d < 24*time.Hour {
-		return fmt.Sprintf("%dh", int(d.Hours()))
-	}
-	return fmt.Sprintf("%dd", int(d.Hours()/24))
 }

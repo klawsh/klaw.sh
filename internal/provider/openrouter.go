@@ -179,7 +179,7 @@ func (p *OpenRouterProvider) buildTools(tools []ToolDefinition) []openai.ChatCom
 
 	for _, t := range tools {
 		var schema openai.FunctionParameters
-		json.Unmarshal(t.InputSchema, &schema)
+		_ = json.Unmarshal(t.InputSchema, &schema)
 
 		param := openai.ChatCompletionToolParam{
 			Type: "function",

@@ -72,7 +72,7 @@ func (t *TaskChannel) Send(ctx context.Context, msg *Message) error {
 
 	if msg.IsPartial {
 		fmt.Print(msg.Content)
-		os.Stdout.Sync()
+		_ = os.Stdout.Sync()
 		return nil
 	}
 

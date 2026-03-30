@@ -71,7 +71,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 		fmt.Println("Set environment variables:")
 		fmt.Println("  export SLACK_BOT_TOKEN=xoxb-...")
 		fmt.Println("  export SLACK_APP_TOKEN=xapp-...")
-		return fmt.Errorf("Slack tokens required")
+		return fmt.Errorf("slack tokens required")
 	}
 
 	// Determine provider
@@ -315,10 +315,7 @@ You are a capable AI that can LEARN and ADAPT. Use your tools to extend your abi
 		fmt.Printf("\n")
 
 		// Check if we should skip already-replied messages (default: true)
-		skipReplied := true
-		if job.Config != nil && job.Config["skip_replied"] == "false" {
-			skipReplied = false
-		}
+		skipReplied := job.Config == nil || job.Config["skip_replied"] != "false"
 
 		// Filter out messages that already have bot replies (if enabled)
 		var newMessages []channel.ChannelMessage
@@ -372,7 +369,7 @@ You are a capable AI that can LEARN and ADAPT. Use your tools to extend your abi
 					result = result[:1000] + "..."
 				}
 				if msg.SlackTS != "" {
-					slackChan.PostThreadReply(channelID, msg.SlackTS, result)
+					_ = slackChan.PostThreadReply(channelID, msg.SlackTS, result)
 					fmt.Printf("  ✓ Replied to: %s\n", msg.Text[:min(30, len(msg.Text))])
 				}
 				results = append(results, result)
@@ -452,7 +449,7 @@ You are a capable AI that can LEARN and ADAPT. Use your tools to extend your abi
 	}
 
 	// Start scheduler
-	sched.Start(ctx)
+	_ = sched.Start(ctx)
 
 	// Print startup info
 	fmt.Println("╭─────────────────────────────────────────╮")

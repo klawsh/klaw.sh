@@ -285,7 +285,7 @@ func (m *Marketplace) GetSkill(org, name string) (*MarketplaceSkill, error) {
 		}
 		return nil, fmt.Errorf("skill not found: %s/%s", org, name)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		// Fallback
@@ -320,19 +320,19 @@ func FormatSkillCard(skill MarketplaceSkill) string {
 	if skill.Verified {
 		verified = " ✓"
 	}
-	sb.WriteString(fmt.Sprintf("📦 %s/%s%s\n", skill.Org, skill.Name, verified))
+	fmt.Fprintf(&sb, "📦 %s/%s%s\n", skill.Org, skill.Name, verified)
 
 	// Description
-	sb.WriteString(fmt.Sprintf("   %s\n", skill.Description))
+	fmt.Fprintf(&sb, "   %s\n", skill.Description)
 
 	// Stats
 	if skill.Downloads > 0 || skill.Stars > 0 {
-		sb.WriteString(fmt.Sprintf("   ⬇️ %d downloads  ⭐ %d stars\n", skill.Downloads, skill.Stars))
+		fmt.Fprintf(&sb, "   ⬇️ %d downloads  ⭐ %d stars\n", skill.Downloads, skill.Stars)
 	}
 
 	// Tags
 	if len(skill.Tags) > 0 {
-		sb.WriteString(fmt.Sprintf("   🏷️  %s\n", strings.Join(skill.Tags, ", ")))
+		fmt.Fprintf(&sb, "   🏷️  %s\n", strings.Join(skill.Tags, ", "))
 	}
 
 	return sb.String()

@@ -206,15 +206,15 @@ func TestManager_List(t *testing.T) {
 
 	// Create 3 sessions
 	s1 := m.New("m1", "p1", "", "", "")
-	m.ForceSave()
+	_ = m.ForceSave()
 	time.Sleep(10 * time.Millisecond) // ensure different timestamps
 
 	s2 := m.New("m2", "p2", "", "", "")
-	m.ForceSave()
+	_ = m.ForceSave()
 	time.Sleep(10 * time.Millisecond)
 
 	s3 := m.New("m3", "p3", "", "", "")
-	m.ForceSave()
+	_ = m.ForceSave()
 
 	sessions, err := m.List()
 	if err != nil {
@@ -259,7 +259,7 @@ func TestManager_List_NonexistentDir(t *testing.T) {
 func TestManager_Delete(t *testing.T) {
 	m := newTestManager(t)
 	sess := m.New("model", "prov", "", "", "")
-	m.ForceSave()
+	_ = m.ForceSave()
 
 	if err := m.Delete(sess.ID); err != nil {
 		t.Fatalf("Delete error: %v", err)
@@ -308,7 +308,7 @@ func TestSession_CostFields(t *testing.T) {
 	sess.TotalOutputTokens = 2000
 	sess.TotalCost = 1.23
 
-	m.ForceSave()
+	_ = m.ForceSave()
 
 	// Load and verify
 	m2 := &Manager{dir: m.dir, debounceMin: 2 * time.Second}

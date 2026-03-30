@@ -801,7 +801,7 @@ func (e *echoTool) Description() string          { return "echoes input" }
 func (e *echoTool) Schema() json.RawMessage      { return json.RawMessage(`{"type":"object","properties":{"msg":{"type":"string"}}}`) }
 func (e *echoTool) Execute(_ context.Context, params json.RawMessage) (*tool.Result, error) {
 	var p struct{ Msg string `json:"msg"` }
-	json.Unmarshal(params, &p)
+	_ = json.Unmarshal(params, &p)
 	return &tool.Result{Content: p.Msg}, nil
 }
 

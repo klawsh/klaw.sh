@@ -44,7 +44,7 @@ type PodmanRuntime struct {
 
 // NewPodmanRuntime creates a new Podman runtime manager.
 func NewPodmanRuntime(stateDir string) *PodmanRuntime {
-	os.MkdirAll(stateDir, 0755)
+	_ = os.MkdirAll(stateDir, 0755)
 	return &PodmanRuntime{
 		image:      DefaultImage,
 		stateDir:   stateDir,
@@ -72,7 +72,7 @@ func (p *PodmanRuntime) CheckPodman() error {
 	cmd := exec.Command("podman", "info", "--format", "{{.Host.RemoteSocket.Exists}}")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf(`Podman is not running.
+		return fmt.Errorf(`podman is not running.
 
 On macOS, start Podman with:
   podman machine init   # (first time only)
@@ -81,11 +81,11 @@ On macOS, start Podman with:
 On Linux, start the Podman service:
   systemctl --user start podman.socket
 
-Error: %w`, err)
+error: %w`, err)
 	}
 
 	if strings.TrimSpace(string(output)) == "false" {
-		return fmt.Errorf(`Podman socket not available.
+		return fmt.Errorf(`podman socket not available.
 
 On macOS:
   podman machine start
@@ -171,7 +171,7 @@ func (p *PodmanRuntime) Stop(nameOrID string) error {
 	}
 
 	// Remove container
-	exec.Command("podman", "rm", nameOrID).Run()
+	_ = exec.Command("podman", "rm", nameOrID).Run()
 
 	p.mu.Lock()
 	delete(p.containers, nameOrID)
@@ -192,7 +192,7 @@ func (p *PodmanRuntime) StopAll() error {
 	names := strings.Split(strings.TrimSpace(string(output)), "\n")
 	for _, name := range names {
 		if name != "" {
-			p.Stop(name)
+			_ = p.Stop(name)
 		}
 	}
 
@@ -239,9 +239,10 @@ func (p *PodmanRuntime) List() ([]*Container, error) {
 		}
 
 		status := "stopped"
-		if pc.State == "running" {
+		switch pc.State {
+		case "running":
 			status = "running"
-		} else if pc.State == "exited" {
+		case "exited":
 			status = "stopped"
 		}
 
@@ -308,7 +309,7 @@ func (p *PodmanRuntime) Attach(nameOrID string) error {
 func (p *PodmanRuntime) Build(ctx context.Context, contextDir string) error {
 	containerfile := filepath.Join(contextDir, "Containerfile")
 	if _, err := os.Stat(containerfile); os.IsNotExist(err) {
-		return fmt.Errorf("Containerfile not found in %s", contextDir)
+		return fmt.Errorf("containerfile not found in %s", contextDir)
 	}
 
 	cmd := exec.CommandContext(ctx, "podman", "build",

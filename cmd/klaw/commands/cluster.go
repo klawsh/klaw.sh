@@ -68,7 +68,7 @@ func runCreateCluster(cmd *cobra.Command, args []string) error {
 	}
 
 	// Auto-switch to new cluster
-	ctxMgr.SetCluster(name)
+	_ = ctxMgr.SetCluster(name)
 
 	fmt.Printf("Cluster '%s' created.\n", name)
 	fmt.Printf("  Namespace 'default' created.\n")
@@ -112,7 +112,7 @@ func runGetClusters(cmd *cobra.Command, args []string) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "  \tNAME\tNAMESPACES\tCHANNELS\tDESCRIPTION")
+	_, _ = fmt.Fprintln(w, "  \tNAME\tNAMESPACES\tCHANNELS\tDESCRIPTION")
 	for _, c := range clusters {
 		marker := " "
 		if c.Name == currentCluster {
@@ -127,7 +127,7 @@ func runGetClusters(cmd *cobra.Command, args []string) error {
 			desc = desc[:37] + "..."
 		}
 
-		fmt.Fprintf(w, "%s\t%s\t%d\t%d\t%s\n",
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%d\t%d\t%s\n",
 			marker, c.Name, len(namespaces), len(channels), desc)
 	}
 	return w.Flush()
@@ -288,7 +288,7 @@ func runGetNamespaces(cmd *cobra.Command, args []string) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintf(w, "  \tNAME\tCHANNELS\tAGENTS\tDESCRIPTION\n")
+	_, _ = fmt.Fprintf(w, "  \tNAME\tCHANNELS\tAGENTS\tDESCRIPTION\n")
 	for _, ns := range namespaces {
 		marker := " "
 		if ns.Name == currentNS {
@@ -302,7 +302,7 @@ func runGetNamespaces(cmd *cobra.Command, args []string) error {
 			desc = desc[:27] + "..."
 		}
 
-		fmt.Fprintf(w, "%s\t%s\t%d\t%d\t%s\n",
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%d\t%d\t%s\n",
 			marker, ns.Name, len(channels), 0, desc)
 	}
 	return w.Flush()

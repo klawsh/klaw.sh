@@ -280,7 +280,7 @@ func runTUIChat(ctx context.Context, baseCfg agent.Config) error {
 		if err := tuiChan.Start(ctx); err != nil {
 			return
 		}
-		ag.Run(ctx)
+		_ = ag.Run(ctx)
 	}()
 
 	// Convert channels for TUI
@@ -305,7 +305,7 @@ func runTUIChat(ctx context.Context, baseCfg agent.Config) error {
 	p := tea.NewProgram(model, tea.WithAltScreen())
 	_, err := p.Run()
 
-	tuiChan.Stop()
+	_ = tuiChan.Stop()
 	return err
 }
 

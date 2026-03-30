@@ -33,8 +33,7 @@ type Server struct {
 type connectedNode struct {
 	node       *Node
 	lastPing   time.Time
-	taskChan   chan *Task
-	resultChan chan *TaskResult
+	taskChan chan *Task
 }
 
 // TaskResult holds the result of a task execution
@@ -128,7 +127,7 @@ func (s *Server) Stop() error {
 	s.cancel()
 
 	if s.listener != nil {
-		s.listener.Close()
+		_ = s.listener.Close()
 	}
 
 	s.wg.Wait()
@@ -137,7 +136,7 @@ func (s *Server) Stop() error {
 
 // handleConnection handles a new node connection
 func (s *Server) handleConnection(conn net.Conn) {
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Read first message
 	// For simplicity, using JSON over TCP
@@ -160,13 +159,13 @@ func (s *Server) handleConnection(conn net.Conn) {
 	}
 
 	if msg.Type != "register" {
-		encoder.Encode(&Message{Type: "error", Error: "expected register or dispatch message"})
+		_ = encoder.Encode(&Message{Type: "error", Error: "expected register or dispatch message"})
 		return
 	}
 
 	// Validate token
 	if s.config.AuthToken != "" && msg.Token != s.config.AuthToken {
-		encoder.Encode(&Message{Type: "error", Error: "invalid token"})
+		_ = encoder.Encode(&Message{Type: "error", Error: "invalid token"})
 		return
 	}
 
@@ -183,7 +182,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 	}
 
 	if err := s.store.SaveNode(s.ctx, node); err != nil {
-		encoder.Encode(&Message{Type: "error", Error: err.Error()})
+		_ = encoder.Encode(&Message{Type: "error", Error: err.Error()})
 		return
 	}
 
@@ -203,7 +202,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 	s.taskChansMu.Unlock()
 
 	// Send registration response
-	encoder.Encode(&Message{
+	_ = encoder.Encode(&Message{
 		Type:   "registered",
 		NodeID: node.ID,
 	})
@@ -224,7 +223,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 	s.taskChansMu.Unlock()
 
 	node.Status = "disconnected"
-	s.store.SaveNode(s.ctx, node)
+	_ = s.store.SaveNode(s.ctx, node)
 
 	fmt.Printf("❌ Node disconnected: %s (%s)\n", node.Name, node.ID)
 }
@@ -234,7 +233,7 @@ func (s *Server) handleNodeSession(node *Node, conn net.Conn, decoder *messageDe
 	// Start goroutine to send tasks to node
 	go func() {
 		for task := range taskChan {
-			encoder.Encode(&Message{
+			_ = encoder.Encode(&Message{
 				Type:   "task",
 				TaskID: task.ID,
 				Prompt: task.Prompt,
@@ -259,9 +258,9 @@ func (s *Server) handleNodeSession(node *Node, conn net.Conn, decoder *messageDe
 			s.nodesMu.Unlock()
 
 			node.LastSeen = time.Now()
-			s.store.SaveNode(s.ctx, node)
+			_ = s.store.SaveNode(s.ctx, node)
 
-			encoder.Encode(&Message{Type: "heartbeat_ack"})
+			_ = encoder.Encode(&Message{Type: "heartbeat_ack"})
 
 		case "register_agent":
 			agent := &Agent{
@@ -279,15 +278,15 @@ func (s *Server) handleNodeSession(node *Node, conn net.Conn, decoder *messageDe
 			}
 
 			if err := s.store.SaveAgent(s.ctx, agent); err != nil {
-				encoder.Encode(&Message{Type: "error", Error: err.Error()})
+				_ = encoder.Encode(&Message{Type: "error", Error: err.Error()})
 				continue
 			}
 
 			// Update node's agent list
 			node.AgentIDs = append(node.AgentIDs, agent.ID)
-			s.store.SaveNode(s.ctx, node)
+			_ = s.store.SaveNode(s.ctx, node)
 
-			encoder.Encode(&Message{
+			_ = encoder.Encode(&Message{
 				Type:    "agent_registered",
 				AgentID: agent.ID,
 			})
@@ -295,8 +294,8 @@ func (s *Server) handleNodeSession(node *Node, conn net.Conn, decoder *messageDe
 			fmt.Printf("  📦 Agent registered: %s on %s\n", agent.Name, node.Name)
 
 		case "deregister_agent":
-			s.store.DeleteAgent(s.ctx, msg.AgentID)
-			encoder.Encode(&Message{Type: "agent_deregistered"})
+			_ = s.store.DeleteAgent(s.ctx, msg.AgentID)
+			_ = encoder.Encode(&Message{Type: "agent_deregistered"})
 
 		case "task_result":
 			task, err := s.store.GetTask(s.ctx, msg.TaskID)
@@ -310,7 +309,7 @@ func (s *Server) handleNodeSession(node *Node, conn net.Conn, decoder *messageDe
 					task.Status = "completed"
 					task.Result = msg.Result
 				}
-				s.store.SaveTask(s.ctx, task)
+				_ = s.store.SaveTask(s.ctx, task)
 			}
 		}
 	}
@@ -332,7 +331,7 @@ func (s *Server) heartbeatChecker() {
 			for id, cn := range s.nodes {
 				if time.Since(cn.lastPing) > 60*time.Second {
 					cn.node.Status = "not-ready"
-					s.store.SaveNode(s.ctx, cn.node)
+					_ = s.store.SaveNode(s.ctx, cn.node)
 					fmt.Printf("⚠️  Node not responding: %s\n", cn.node.Name)
 					_ = id // TODO: handle dead nodes
 				}
@@ -398,14 +397,14 @@ func (s *Server) DispatchTask(ctx context.Context, agentName, prompt string, met
 	if !ok {
 		task.Status = "failed"
 		task.Error = "node not connected"
-		s.store.SaveTask(ctx, task)
+		_ = s.store.SaveTask(ctx, task)
 		return task, fmt.Errorf("node not connected: %s", agent.NodeID)
 	}
 
 	task.Status = "dispatched"
 	now := time.Now()
 	task.StartedAt = &now
-	s.store.SaveTask(ctx, task)
+	_ = s.store.SaveTask(ctx, task)
 
 	taskChan <- task
 
@@ -431,7 +430,7 @@ func (s *Server) GetTasks(ctx context.Context) ([]*Task, error) {
 func (s *Server) handleDispatch(conn net.Conn, msg *Message, encoder *messageEncoder) {
 	// Validate token
 	if s.config.AuthToken != "" && msg.Token != s.config.AuthToken {
-		encoder.Encode(&Message{Type: "error", Error: "invalid token"})
+		_ = encoder.Encode(&Message{Type: "error", Error: "invalid token"})
 		return
 	}
 
@@ -440,12 +439,12 @@ func (s *Server) handleDispatch(conn net.Conn, msg *Message, encoder *messageEnc
 	// Dispatch the task
 	task, err := s.DispatchTask(s.ctx, msg.Agent, msg.Prompt, nil)
 	if err != nil {
-		encoder.Encode(&Message{Type: "error", Error: err.Error()})
+		_ = encoder.Encode(&Message{Type: "error", Error: err.Error()})
 		return
 	}
 
 	// Send task created response
-	encoder.Encode(&Message{
+	_ = encoder.Encode(&Message{
 		Type:   "task_created",
 		TaskID: task.ID,
 	})
@@ -459,7 +458,7 @@ func (s *Server) handleDispatch(conn net.Conn, msg *Message, encoder *messageEnc
 	for {
 		select {
 		case <-timeout:
-			encoder.Encode(&Message{
+			_ = encoder.Encode(&Message{
 				Type:  "task_failed",
 				Error: "timeout waiting for task completion",
 			})
@@ -474,7 +473,7 @@ func (s *Server) handleDispatch(conn net.Conn, msg *Message, encoder *messageEnc
 
 			switch updatedTask.Status {
 			case "completed":
-				encoder.Encode(&Message{
+				_ = encoder.Encode(&Message{
 					Type:   "task_completed",
 					TaskID: task.ID,
 					Result: updatedTask.Result,
@@ -482,7 +481,7 @@ func (s *Server) handleDispatch(conn net.Conn, msg *Message, encoder *messageEnc
 				return
 
 			case "failed":
-				encoder.Encode(&Message{
+				_ = encoder.Encode(&Message{
 					Type:   "task_failed",
 					TaskID: task.ID,
 					Error:  updatedTask.Error,
@@ -490,7 +489,7 @@ func (s *Server) handleDispatch(conn net.Conn, msg *Message, encoder *messageEnc
 				return
 
 			case "dispatched", "running":
-				encoder.Encode(&Message{
+				_ = encoder.Encode(&Message{
 					Type:   "task_progress",
 					TaskID: task.ID,
 					Status: updatedTask.Status,

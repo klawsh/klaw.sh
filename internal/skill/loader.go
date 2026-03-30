@@ -75,7 +75,7 @@ func (l *SkillLoader) InstallSkill(name string) error {
 
 		if resp.StatusCode == http.StatusOK {
 			content, err := io.ReadAll(resp.Body)
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			if err != nil {
 				lastErr = err
 				continue
@@ -85,7 +85,7 @@ func (l *SkillLoader) InstallSkill(name string) error {
 			}
 			return os.WriteFile(skillPath, content, 0644)
 		}
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		lastErr = fmt.Errorf("HTTP %d from %s", resp.StatusCode, url)
 	}
 
@@ -240,7 +240,7 @@ func (l *SkillLoader) installOneFromGitHub(org, repo, skillName string) error {
 
 		if resp.StatusCode == http.StatusOK {
 			content, err := io.ReadAll(resp.Body)
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			if err != nil {
 				lastErr = err
 				continue
@@ -250,7 +250,7 @@ func (l *SkillLoader) installOneFromGitHub(org, repo, skillName string) error {
 			}
 			return os.WriteFile(skillPath, content, 0644)
 		}
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		lastErr = fmt.Errorf("HTTP %d from %s", resp.StatusCode, url)
 	}
 
@@ -280,11 +280,11 @@ func (l *SkillLoader) installAllFromGitHub(org, repo string) error {
 			continue
 		}
 		if resp.StatusCode != http.StatusOK {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			continue
 		}
 		body, err := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		if err != nil {
 			continue
 		}

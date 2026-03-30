@@ -270,7 +270,7 @@ func setConfigValue(cfg *config.Config, key, value string) error {
 		switch parts[1] {
 		case "port":
 			var port int
-			fmt.Sscanf(value, "%d", &port)
+			_, _ = fmt.Sscanf(value, "%d", &port)
 			cfg.Server.Port = port
 		case "host":
 			cfg.Server.Host = value

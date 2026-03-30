@@ -125,14 +125,14 @@ func (t *AgentTool) Execute(ctx context.Context, params json.RawMessage) (*Resul
 
 	// Build system prompt
 	var systemPrompt strings.Builder
-	systemPrompt.WriteString(fmt.Sprintf("You are %s, an AI agent.\n\n", p.Name))
-	systemPrompt.WriteString(fmt.Sprintf("## Your Role\n%s\n\n", p.Description))
+	_, _ = fmt.Fprintf(&systemPrompt, "You are %s, an AI agent.\n\n", p.Name)
+	_, _ = fmt.Fprintf(&systemPrompt, "## Your Role\n%s\n\n", p.Description)
 	systemPrompt.WriteString("## Guidelines\n")
 	systemPrompt.WriteString("- Be concise and direct in your responses\n")
 	systemPrompt.WriteString("- Take action when needed, don't just describe what you could do\n")
 	systemPrompt.WriteString("- If you need more information, ask specific questions\n")
 	if len(p.Skills) > 0 {
-		systemPrompt.WriteString(fmt.Sprintf("- You have access to these skills: %s\n", strings.Join(p.Skills, ", ")))
+		_, _ = fmt.Fprintf(&systemPrompt, "- You have access to these skills: %s\n", strings.Join(p.Skills, ", "))
 	}
 	systemPrompt.WriteString("\n## Response Format\n")
 	systemPrompt.WriteString("- Keep responses short (1-3 sentences when possible)\n")
@@ -167,21 +167,21 @@ func (t *AgentTool) Execute(ctx context.Context, params json.RawMessage) (*Resul
 	// Build response
 	var sb strings.Builder
 	if isUpdate {
-		sb.WriteString(fmt.Sprintf("Agent '%s' updated!\n\n", p.Name))
+		_, _ = fmt.Fprintf(&sb, "Agent '%s' updated!\n\n", p.Name)
 	} else {
-		sb.WriteString(fmt.Sprintf("Agent '%s' created!\n\n", p.Name))
+		_, _ = fmt.Fprintf(&sb, "Agent '%s' created!\n\n", p.Name)
 	}
-	sb.WriteString(fmt.Sprintf("Description: %s\n", p.Description))
-	sb.WriteString(fmt.Sprintf("Model: %s\n", p.Model))
+	_, _ = fmt.Fprintf(&sb, "Description: %s\n", p.Description)
+	_, _ = fmt.Fprintf(&sb, "Model: %s\n", p.Model)
 
 	if len(p.Skills) > 0 {
-		sb.WriteString(fmt.Sprintf("Skills: %s\n", strings.Join(p.Skills, ", ")))
+		_, _ = fmt.Fprintf(&sb, "Skills: %s\n", strings.Join(p.Skills, ", "))
 	}
 	if len(p.Triggers) > 0 {
-		sb.WriteString(fmt.Sprintf("Triggers: %s\n", strings.Join(p.Triggers, ", ")))
+		_, _ = fmt.Fprintf(&sb, "Triggers: %s\n", strings.Join(p.Triggers, ", "))
 	}
 
-	sb.WriteString(fmt.Sprintf("\nYou can now route tasks to @%s or use triggers: %s", p.Name, strings.Join(p.Triggers, ", ")))
+	_, _ = fmt.Fprintf(&sb, "\nYou can now route tasks to @%s or use triggers: %s", p.Name, strings.Join(p.Triggers, ", "))
 
 	return &Result{Content: sb.String()}, nil
 }

@@ -101,7 +101,7 @@ func (s *Server) Start(ctx context.Context) error {
 	mux.HandleFunc("/v1/models", s.handleModels)
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"ok"}`))
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
 
 	handler := s.corsMiddleware(s.authMiddleware(mux))
@@ -120,7 +120,7 @@ func (s *Server) Start(ctx context.Context) error {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		srv.Shutdown(shutdownCtx)
+		_ = srv.Shutdown(shutdownCtx)
 	}()
 
 	return srv.ListenAndServe()

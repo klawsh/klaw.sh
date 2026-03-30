@@ -115,7 +115,7 @@ func fetchLatestVersion() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("network error: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == 403 {
 		return "", fmt.Errorf("GitHub API rate limit exceeded. Try again later, or set GITHUB_TOKEN environment variable")
@@ -195,7 +195,7 @@ func downloadAndReplace(url, execPath, newVersion string) error {
 	if err != nil {
 		return fmt.Errorf("download failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == 404 {
 		return fmt.Errorf("no binary available for %s/%s. Build from source instead", runtime.GOOS, runtime.GOARCH)
@@ -219,7 +219,7 @@ func downloadAndReplace(url, execPath, newVersion string) error {
 	success := false
 	defer func() {
 		if !success {
-			os.Remove(tmpPath)
+			_ = os.Remove(tmpPath)
 		}
 	}()
 
@@ -228,10 +228,10 @@ func downloadAndReplace(url, execPath, newVersion string) error {
 	reader := io.TeeReader(resp.Body, pw)
 
 	if _, err := io.Copy(tmpFile, reader); err != nil {
-		tmpFile.Close()
+		_ = tmpFile.Close()
 		return fmt.Errorf("download interrupted: %w", err)
 	}
-	tmpFile.Close()
+	_ = tmpFile.Close()
 	fmt.Fprint(os.Stderr, "\n") // newline after progress
 
 	// Make executable
@@ -243,16 +243,16 @@ func downloadAndReplace(url, execPath, newVersion string) error {
 	if runtime.GOOS == "windows" {
 		// Windows: rename current to .old, then rename new into place
 		oldPath := execPath + ".old"
-		os.Remove(oldPath) // ignore error
+		_ = os.Remove(oldPath) // ignore error
 		if err := os.Rename(execPath, oldPath); err != nil {
 			return fmt.Errorf("failed to replace binary (try running as Administrator): %w", err)
 		}
 		if err := os.Rename(tmpPath, execPath); err != nil {
 			// Try to restore
-			os.Rename(oldPath, execPath)
+			_ = os.Rename(oldPath, execPath)
 			return fmt.Errorf("failed to install new binary: %w", err)
 		}
-		os.Remove(oldPath) // best-effort cleanup
+		_ = os.Remove(oldPath) // best-effort cleanup
 	} else {
 		// Unix: atomic rename
 		if err := os.Rename(tmpPath, execPath); err != nil {

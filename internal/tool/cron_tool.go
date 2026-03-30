@@ -30,7 +30,7 @@ func NewCronCreateToolWithScheduler(sched interface{}) *CronCreateTool {
 		s = sched.(*scheduler.Scheduler)
 	} else {
 		s = scheduler.NewScheduler(config.StateDir() + "/scheduler")
-		s.Load()
+		_ = s.Load()
 	}
 	return &CronCreateTool{
 		scheduler: s,
@@ -166,19 +166,19 @@ func (t *CronCreateTool) Execute(ctx context.Context, params json.RawMessage) (*
 	} else {
 		job.Config["skip_replied"] = "false"
 	}
-	t.scheduler.Save()
+	_ = t.scheduler.Save()
 
 	// Build response
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Scheduled job '%s' created!\n\n", job.Name))
-	sb.WriteString(fmt.Sprintf("Schedule: %s\n", scheduler.FormatSchedule(cron)))
-	sb.WriteString(fmt.Sprintf("Agent: %s\n", job.Agent))
-	sb.WriteString(fmt.Sprintf("Task: %s\n", truncateString(job.Task, 100)))
+	_, _ = fmt.Fprintf(&sb, "Scheduled job '%s' created!\n\n", job.Name)
+	_, _ = fmt.Fprintf(&sb, "Schedule: %s\n", scheduler.FormatSchedule(cron))
+	_, _ = fmt.Fprintf(&sb, "Agent: %s\n", job.Agent)
+	_, _ = fmt.Fprintf(&sb, "Task: %s\n", truncateString(job.Task, 100))
 	if p.Channel != "" {
-		sb.WriteString(fmt.Sprintf("Channel: %s (will read recent messages)\n", p.Channel))
+		_, _ = fmt.Fprintf(&sb, "Channel: %s (will read recent messages)\n", p.Channel)
 	}
 	if job.NextRun != nil {
-		sb.WriteString(fmt.Sprintf("Next run: %s\n", job.NextRun.Format("Jan 02 15:04")))
+		_, _ = fmt.Fprintf(&sb, "Next run: %s\n", job.NextRun.Format("Jan 02 15:04"))
 	}
 
 	return &Result{Content: sb.String()}, nil
@@ -240,11 +240,11 @@ func (t *AgentListTool) Execute(ctx context.Context, params json.RawMessage) (*R
 	}
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Agents in %s/%s:\n\n", clusterName, namespace))
+	_, _ = fmt.Fprintf(&sb, "Agents in %s/%s:\n\n", clusterName, namespace)
 	for _, ag := range agents {
-		sb.WriteString(fmt.Sprintf("- %s: %s\n", ag.Name, ag.Description))
+		_, _ = fmt.Fprintf(&sb, "- %s: %s\n", ag.Name, ag.Description)
 		if len(ag.Triggers) > 0 {
-			sb.WriteString(fmt.Sprintf("  Triggers: %s\n", strings.Join(ag.Triggers, ", ")))
+			_, _ = fmt.Fprintf(&sb, "  Triggers: %s\n", strings.Join(ag.Triggers, ", "))
 		}
 	}
 
@@ -269,7 +269,7 @@ func NewCronListToolWithScheduler(sched interface{}) *CronListTool {
 		s = sched.(*scheduler.Scheduler)
 	} else {
 		s = scheduler.NewScheduler(config.StateDir() + "/scheduler")
-		s.Load()
+		_ = s.Load()
 	}
 	return &CronListTool{
 		scheduler: s,
@@ -306,17 +306,17 @@ func (t *CronListTool) Execute(ctx context.Context, params json.RawMessage) (*Re
 	}
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Scheduled jobs in %s/%s:\n\n", clusterName, namespace))
+	_, _ = fmt.Fprintf(&sb, "Scheduled jobs in %s/%s:\n\n", clusterName, namespace)
 	for _, job := range jobs {
 		status := "enabled"
 		if !job.Enabled {
 			status = "disabled"
 		}
-		sb.WriteString(fmt.Sprintf("- %s (%s)\n", job.Name, status))
-		sb.WriteString(fmt.Sprintf("  Schedule: %s\n", scheduler.FormatSchedule(job.Cron)))
-		sb.WriteString(fmt.Sprintf("  Agent: %s\n", job.Agent))
+		_, _ = fmt.Fprintf(&sb, "- %s (%s)\n", job.Name, status)
+		_, _ = fmt.Fprintf(&sb, "  Schedule: %s\n", scheduler.FormatSchedule(job.Cron))
+		_, _ = fmt.Fprintf(&sb, "  Agent: %s\n", job.Agent)
 		if job.NextRun != nil {
-			sb.WriteString(fmt.Sprintf("  Next run: %s\n", job.NextRun.Format("Jan 02 15:04")))
+			_, _ = fmt.Fprintf(&sb, "  Next run: %s\n", job.NextRun.Format("Jan 02 15:04"))
 		}
 	}
 

@@ -189,7 +189,7 @@ func (fs *FileStore) save() error {
 		nodes = append(nodes, n)
 	}
 	if data, err := json.MarshalIndent(nodes, "", "  "); err == nil {
-		os.WriteFile(filepath.Join(fs.dataDir, "nodes.json"), data, 0644)
+		_ = os.WriteFile(filepath.Join(fs.dataDir, "nodes.json"), data, 0644)
 	}
 
 	// Save agents
@@ -198,7 +198,7 @@ func (fs *FileStore) save() error {
 		agents = append(agents, a)
 	}
 	if data, err := json.MarshalIndent(agents, "", "  "); err == nil {
-		os.WriteFile(filepath.Join(fs.dataDir, "agents.json"), data, 0644)
+		_ = os.WriteFile(filepath.Join(fs.dataDir, "agents.json"), data, 0644)
 	}
 
 	// Save tasks
@@ -207,7 +207,7 @@ func (fs *FileStore) save() error {
 		tasks = append(tasks, t)
 	}
 	if data, err := json.MarshalIndent(tasks, "", "  "); err == nil {
-		os.WriteFile(filepath.Join(fs.dataDir, "tasks.json"), data, 0644)
+		_ = os.WriteFile(filepath.Join(fs.dataDir, "tasks.json"), data, 0644)
 	}
 
 	return nil

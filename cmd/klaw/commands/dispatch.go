@@ -103,7 +103,7 @@ func runDispatchGRPC(agentName, prompt string) error {
 	if err != nil {
 		return fmt.Errorf("failed to connect to controller: %w", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	client := pb.NewControllerServiceClient(conn)
 
@@ -130,14 +130,15 @@ func runDispatchGRPC(agentName, prompt string) error {
 		return nil
 	}
 
-	if resp.Status == "completed" {
+	switch resp.Status {
+	case "completed":
 		fmt.Println("\n✅ Task completed!")
 		fmt.Println()
 		fmt.Println("Result:")
 		fmt.Println("───────────────────────────────────────")
 		fmt.Println(resp.Result)
 		fmt.Println("───────────────────────────────────────")
-	} else if resp.Status == "timeout" {
+	case "timeout":
 		return fmt.Errorf("task timed out")
 	}
 
@@ -150,7 +151,7 @@ func runDispatchTCP(agentName, prompt string) error {
 	if err != nil {
 		return fmt.Errorf("failed to connect to controller: %w", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	encoder := json.NewEncoder(conn)
 	reader := bufio.NewReader(conn)
@@ -196,7 +197,7 @@ func runDispatchTCP(agentName, prompt string) error {
 	fmt.Println("\n⏳ Waiting for completion...")
 
 	// Set read deadline
-	conn.SetReadDeadline(time.Now().Add(time.Duration(dispatchTimeout) * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(time.Duration(dispatchTimeout) * time.Second))
 
 	// Poll for result
 	for {

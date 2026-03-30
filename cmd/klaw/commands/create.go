@@ -60,7 +60,6 @@ func init() {
 	createServerCmd.Flags().StringVar(&serverHost, "host", "127.0.0.1", "server host")
 }
 
-var channelType string
 var channelToken string
 var channelName string
 

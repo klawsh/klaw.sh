@@ -118,7 +118,7 @@ func (a *Agent) Run(ctx context.Context) error {
 	}
 
 	// Print welcome
-	a.channel.Send(ctx, &channel.Message{
+	_ = a.channel.Send(ctx, &channel.Message{
 		Role:    "assistant",
 		Content: "klaw ready. Type /help for commands, /exit to quit.\n",
 	})
@@ -133,7 +133,7 @@ func (a *Agent) Run(ctx context.Context) error {
 			}
 			if err := a.handleMessage(ctx, msg); err != nil {
 				// Send error to channel so user sees it
-				a.channel.Send(ctx, &channel.Message{
+				_ = a.channel.Send(ctx, &channel.Message{
 					Role:    "error",
 					Content: err.Error(),
 				})
@@ -183,7 +183,7 @@ func (a *Agent) handleMessage(ctx context.Context, msg *channel.Message) error {
 
 		// Check if context needs compaction
 		if a.contextMgr.NeedsCompaction(history) {
-			a.channel.Send(ctx, &channel.Message{
+			_ = a.channel.Send(ctx, &channel.Message{
 				Role:      "assistant",
 				Content:   "Compacting context...\n",
 				IsPartial: true,
@@ -222,7 +222,7 @@ func (a *Agent) handleMessage(ctx context.Context, msg *channel.Message) error {
 			switch event.Type {
 			case "text":
 				textContent.WriteString(event.Text)
-				a.channel.Send(ctx, &channel.Message{
+				_ = a.channel.Send(ctx, &channel.Message{
 					Role:      "assistant",
 					Content:   event.Text,
 					IsPartial: true,
@@ -246,7 +246,7 @@ func (a *Agent) handleMessage(ctx context.Context, msg *channel.Message) error {
 						"cost", a.costTracker.Summary(),
 					)
 				}
-				a.channel.Send(ctx, &channel.Message{
+				_ = a.channel.Send(ctx, &channel.Message{
 					Role:   "assistant",
 					IsDone: true,
 				})
@@ -413,7 +413,7 @@ func (a *Agent) showToolStart(ctx context.Context, tc provider.ToolCall) {
 			toolDesc = fmt.Sprintf("bash: %s", truncate(params.Command, 60))
 		}
 	}
-	a.channel.Send(ctx, &channel.Message{
+	_ = a.channel.Send(ctx, &channel.Message{
 		Role:      "assistant",
 		Content:   fmt.Sprintf("\n╭─ %s\n", toolDesc),
 		IsPartial: true,
@@ -422,7 +422,7 @@ func (a *Agent) showToolStart(ctx context.Context, tc provider.ToolCall) {
 
 func (a *Agent) showToolResult(ctx context.Context, result *tool.Result) {
 	if result.IsError {
-		a.channel.Send(ctx, &channel.Message{
+		_ = a.channel.Send(ctx, &channel.Message{
 			Role:      "assistant",
 			Content:   fmt.Sprintf("│ ERROR: %s\n╰─\n", truncate(result.Content, 500)),
 			IsPartial: true,
@@ -432,13 +432,13 @@ func (a *Agent) showToolResult(ctx context.Context, result *tool.Result) {
 		var output strings.Builder
 		for i, line := range lines {
 			if i >= 20 {
-				output.WriteString(fmt.Sprintf("│ ... (%d more lines)\n", len(lines)-20))
+				_, _ = fmt.Fprintf(&output, "│ ... (%d more lines)\n", len(lines)-20)
 				break
 			}
-			output.WriteString(fmt.Sprintf("│ %s\n", line))
+			_, _ = fmt.Fprintf(&output, "│ %s\n", line)
 		}
 		output.WriteString("╰─\n")
-		a.channel.Send(ctx, &channel.Message{
+		_ = a.channel.Send(ctx, &channel.Message{
 			Role:      "assistant",
 			Content:   output.String(),
 			IsPartial: true,

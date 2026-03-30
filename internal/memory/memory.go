@@ -94,7 +94,7 @@ func (m *FileMemory) SaveDaily(ctx context.Context, entry string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open memory file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	timestamp := time.Now().Format("15:04:05")
 	_, err = fmt.Fprintf(f, "\n## %s\n\n%s\n", timestamp, entry)

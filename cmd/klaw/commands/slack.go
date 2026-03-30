@@ -85,7 +85,7 @@ func runSlack(cmd *cobra.Command, args []string) error {
 		fmt.Println("Or environment variables:")
 		fmt.Println("  export SLACK_BOT_TOKEN=xoxb-...")
 		fmt.Println("  export SLACK_APP_TOKEN=xapp-...")
-		return fmt.Errorf("Slack tokens required")
+		return fmt.Errorf("slack tokens required")
 	}
 
 	// Determine provider and create it

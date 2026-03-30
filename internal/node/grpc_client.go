@@ -119,11 +119,11 @@ func (c *GRPCClient) Stop() error {
 	c.cancel()
 
 	if c.taskStream != nil {
-		c.taskStream.CloseSend()
+		_ = c.taskStream.CloseSend()
 	}
 
 	if c.conn != nil {
-		c.conn.Close()
+		_ = c.conn.Close()
 	}
 
 	c.wg.Wait()
@@ -171,7 +171,7 @@ func (c *GRPCClient) heartbeatLoop() {
 			// Send heartbeat via stream
 			c.mu.Lock()
 			if c.taskStream != nil {
-				c.taskStream.Send(&pb.TaskMessage{
+				_ = c.taskStream.Send(&pb.TaskMessage{
 					Type:   "heartbeat",
 					TaskId: c.nodeID,
 				})
@@ -230,7 +230,7 @@ func (c *GRPCClient) executeTask(msg *pb.TaskMessage) {
 	// Send result back
 	c.mu.Lock()
 	if c.taskStream != nil {
-		c.taskStream.Send(&pb.TaskMessage{
+		_ = c.taskStream.Send(&pb.TaskMessage{
 			Type:   "result",
 			TaskId: msg.TaskId,
 			Result: result,

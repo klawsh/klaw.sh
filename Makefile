@@ -33,7 +33,7 @@ fmt:
 
 ## lint: Run linter
 lint:
-	golangci-lint run
+	golangci-lint run ./...
 
 ## deps: Download dependencies
 deps:

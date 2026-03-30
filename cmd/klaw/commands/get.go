@@ -68,10 +68,10 @@ var getServersCmd = &cobra.Command{
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "CONTAINER ID\tNAME\tAGENT\tSTATUS\tAGE")
+		_, _ = fmt.Fprintln(w, "CONTAINER ID\tNAME\tAGENT\tSTATUS\tAGE")
 		for _, c := range containers {
 			age := time.Since(c.StartedAt).Round(time.Second).String()
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", c.ID, c.Name, c.AgentName, c.Status, age)
+			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", c.ID, c.Name, c.AgentName, c.Status, age)
 		}
 		return w.Flush()
 	},
@@ -101,7 +101,7 @@ var getSessionsCmd = &cobra.Command{
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "ID\tNAME\tMODEL\tMESSAGES\tUPDATED")
+		_, _ = fmt.Fprintln(w, "ID\tNAME\tMODEL\tMESSAGES\tUPDATED")
 		for _, s := range sessions {
 			name := s.Name
 			if name == "" {
@@ -109,7 +109,7 @@ var getSessionsCmd = &cobra.Command{
 			}
 			model := truncateModel(s.Model, 25)
 			updated := s.UpdatedAt.Format("2006-01-02 15:04")
-			fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\n", s.ID, name, model, len(s.Messages), updated)
+			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\n", s.ID, name, model, len(s.Messages), updated)
 		}
 		return w.Flush()
 	},
@@ -142,9 +142,9 @@ var getModelsCmd = &cobra.Command{
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "MODEL\tPROVIDER\tDESCRIPTION")
+		_, _ = fmt.Fprintln(w, "MODEL\tPROVIDER\tDESCRIPTION")
 		for _, m := range models {
-			fmt.Fprintf(w, "%s\t%s\t%s\n", m.ID, m.Provider, m.Description)
+			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", m.ID, m.Provider, m.Description)
 		}
 		return w.Flush()
 	},
@@ -203,9 +203,9 @@ var getChannelsCmd = &cobra.Command{
 			fmt.Println("")
 
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-			fmt.Fprintln(w, "CHANNEL\tSTATUS\tDESCRIPTION")
+			_, _ = fmt.Fprintln(w, "CHANNEL\tSTATUS\tDESCRIPTION")
 			for _, c := range channels {
-				fmt.Fprintf(w, "%s\t%s\t%s\n", c.Name, c.Status, c.Description)
+				_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", c.Name, c.Status, c.Description)
 			}
 			return w.Flush()
 		}
@@ -229,9 +229,9 @@ var getChannelsCmd = &cobra.Command{
 		fmt.Printf("Channels in %s/%s:\n\n", clusterName, namespace)
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "NAME\tTYPE\tSTATUS\tCREATED")
+		_, _ = fmt.Fprintln(w, "NAME\tTYPE\tSTATUS\tCREATED")
 		for _, ch := range bindings {
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
+			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
 				ch.Name, ch.Type, ch.Status, ch.CreatedAt.Format("2006-01-02 15:04"))
 		}
 		return w.Flush()
@@ -298,9 +298,9 @@ var getMemoryCmd = &cobra.Command{
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "FILE\tSIZE")
+		_, _ = fmt.Fprintln(w, "FILE\tSIZE")
 		for _, f := range files {
-			fmt.Fprintf(w, "%s\t%d bytes\n", f.Name, f.Size)
+			_, _ = fmt.Fprintf(w, "%s\t%d bytes\n", f.Name, f.Size)
 		}
 		return w.Flush()
 	},
@@ -332,9 +332,9 @@ var getToolsCmd = &cobra.Command{
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "TOOL\tDESCRIPTION")
+		_, _ = fmt.Fprintln(w, "TOOL\tDESCRIPTION")
 		for _, t := range tools {
-			fmt.Fprintf(w, "%s\t%s\n", t.Name, t.Description)
+			_, _ = fmt.Fprintf(w, "%s\t%s\n", t.Name, t.Description)
 		}
 		return w.Flush()
 	},

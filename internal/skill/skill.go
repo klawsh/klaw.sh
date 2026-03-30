@@ -338,7 +338,7 @@ func (t *webSearchTool) Execute(ctx context.Context, params json.RawMessage) (*t
 	var p struct {
 		Query string `json:"query"`
 	}
-	json.Unmarshal(params, &p)
+	_ = json.Unmarshal(params, &p)
 	// TODO: Implement actual web search
 	return &tool.Result{
 		Content: fmt.Sprintf("Web search for '%s' - feature coming soon", p.Query),
@@ -372,7 +372,7 @@ func (t *httpTool) Execute(ctx context.Context, params json.RawMessage) (*tool.R
 	var p struct {
 		URL string `json:"url"`
 	}
-	json.Unmarshal(params, &p)
+	_ = json.Unmarshal(params, &p)
 	return &tool.Result{
 		Content: fmt.Sprintf("HTTP request to '%s' - feature coming soon", p.URL),
 	}, nil

@@ -136,7 +136,7 @@ func (t *Terminal) Send(ctx context.Context, msg *Message) error {
 	if msg.IsPartial {
 		// Streaming: print without newline
 		fmt.Print(msg.Content)
-		os.Stdout.Sync() // Force flush
+		_ = os.Stdout.Sync() // Force flush
 		t.currentLine.WriteString(msg.Content)
 		return nil
 	}

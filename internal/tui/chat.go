@@ -109,7 +109,6 @@ type ChatModel struct {
 }
 
 // Messages
-type thinkingMsg struct{}
 type responseMsg ChatMessage
 type chatDoneMsg struct{}
 type chatErrMsg struct{ err error }

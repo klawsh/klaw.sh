@@ -160,7 +160,7 @@ func (g *Grep) Execute(ctx context.Context, params json.RawMessage) (*Result, er
 	}
 
 	if len(matches) >= maxMatches {
-		result.WriteString(fmt.Sprintf("\n... (limited to %d matches)", maxMatches))
+		_, _ = fmt.Fprintf(&result, "\n... (limited to %d matches)", maxMatches)
 	}
 
 	return &Result{Content: result.String()}, nil
@@ -171,7 +171,7 @@ func searchFile(path string, re *regexp.Regexp) ([]grepMatch, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	var matches []grepMatch
 	scanner := bufio.NewScanner(file)

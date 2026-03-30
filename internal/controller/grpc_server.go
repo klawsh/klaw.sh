@@ -146,14 +146,14 @@ func (s *GRPCServer) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (*
 	node, err := s.store.GetNode(ctx, req.NodeId)
 	if err == nil {
 		node.LastSeen = time.Now()
-		s.store.SaveNode(ctx, node)
+		_ = s.store.SaveNode(ctx, node)
 	}
 
 	return &pb.HeartbeatResponse{Ok: true}, nil
 }
 
 func (s *GRPCServer) Deregister(ctx context.Context, req *pb.DeregisterRequest) (*pb.DeregisterResponse, error) {
-	s.store.DeleteNode(ctx, req.NodeId)
+	_ = s.store.DeleteNode(ctx, req.NodeId)
 	return &pb.DeregisterResponse{Ok: true}, nil
 }
 
@@ -182,7 +182,7 @@ func (s *GRPCServer) RegisterAgent(ctx context.Context, req *pb.RegisterAgentReq
 	node, err := s.store.GetNode(ctx, req.NodeId)
 	if err == nil {
 		node.AgentIDs = append(node.AgentIDs, agent.ID)
-		s.store.SaveNode(ctx, node)
+		_ = s.store.SaveNode(ctx, node)
 	}
 
 	fmt.Printf("  📦 Agent registered: %s on node %s\n", agent.Name, req.NodeId)
@@ -191,7 +191,7 @@ func (s *GRPCServer) RegisterAgent(ctx context.Context, req *pb.RegisterAgentReq
 }
 
 func (s *GRPCServer) DeregisterAgent(ctx context.Context, req *pb.DeregisterAgentRequest) (*pb.DeregisterAgentResponse, error) {
-	s.store.DeleteAgent(ctx, req.AgentId)
+	_ = s.store.DeleteAgent(ctx, req.AgentId)
 	return &pb.DeregisterAgentResponse{Ok: true}, nil
 }
 
@@ -259,7 +259,7 @@ func (s *GRPCServer) TaskStream(stream pb.ControllerService_TaskStreamServer) er
 					task.Status = "completed"
 					task.Result = msg.Result
 				}
-				s.store.SaveTask(s.ctx, task)
+				_ = s.store.SaveTask(s.ctx, task)
 			}
 
 		case "progress":
@@ -341,7 +341,7 @@ func (s *GRPCServer) DispatchTask(ctx context.Context, req *pb.DispatchTaskReque
 	if !ok {
 		task.Status = "failed"
 		task.Error = "node not connected"
-		s.store.SaveTask(ctx, task)
+		_ = s.store.SaveTask(ctx, task)
 		return &pb.DispatchTaskResponse{Error: "node not connected"}, nil
 	}
 
@@ -372,14 +372,14 @@ func (s *GRPCServer) DispatchTask(ctx context.Context, req *pb.DispatchTaskReque
 	if err != nil {
 		task.Status = "failed"
 		task.Error = err.Error()
-		s.store.SaveTask(ctx, task)
+		_ = s.store.SaveTask(ctx, task)
 		return &pb.DispatchTaskResponse{Error: err.Error()}, nil
 	}
 
 	now := time.Now()
 	task.Status = "dispatched"
 	task.StartedAt = &now
-	s.store.SaveTask(ctx, task)
+	_ = s.store.SaveTask(ctx, task)
 
 	if !req.Wait {
 		return &pb.DispatchTaskResponse{
@@ -512,7 +512,7 @@ func (s *GRPCServer) heartbeatChecker() {
 					node, err := s.store.GetNode(s.ctx, nodeID)
 					if err == nil {
 						node.Status = "not-ready"
-						s.store.SaveNode(s.ctx, node)
+						_ = s.store.SaveNode(s.ctx, node)
 					}
 				}
 			}

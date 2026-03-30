@@ -325,7 +325,7 @@ func (s *Scheduler) runJob(job *Job) {
 	}
 	s.mu.Unlock()
 
-	s.Save()
+	_ = s.Save()
 }
 
 // RunJobNow runs a job immediately

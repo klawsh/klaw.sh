@@ -107,7 +107,7 @@ func runControllerStart(cmd *cobra.Command, args []string) error {
 		go func() {
 			<-sigCh
 			fmt.Println("\n👋 Shutting down controller...")
-			server.Stop()
+			_ = server.Stop()
 		}()
 
 		return server.Start()
@@ -122,7 +122,7 @@ func runControllerStart(cmd *cobra.Command, args []string) error {
 	go func() {
 		<-sigCh
 		fmt.Println("\n👋 Shutting down controller...")
-		server.Stop()
+		_ = server.Stop()
 	}()
 
 	return server.Start()
@@ -153,7 +153,7 @@ func runGetNodes(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("controller not running or no data: %v", err)
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	ctx := context.Background()
 	nodes, err := store.ListNodes(ctx)
@@ -177,8 +177,8 @@ func runGetNodes(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Nodes (%d):\n\n", len(nodes))
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tNAME\tSTATUS\tAGENTS\tLAST SEEN")
-	fmt.Fprintln(w, "--\t----\t------\t------\t---------")
+	_, _ = fmt.Fprintln(w, "ID\tNAME\tSTATUS\tAGENTS\tLAST SEEN")
+	_, _ = fmt.Fprintln(w, "--\t----\t------\t------\t---------")
 
 	for _, node := range nodes {
 		status := node.Status
@@ -196,10 +196,10 @@ func runGetNodes(cmd *cobra.Command, args []string) error {
 			lastSeen = node.LastSeen.Format("Jan 02 15:04")
 		}
 
-		fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\n",
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\n",
 			node.ID, node.Name, status, len(node.AgentIDs), lastSeen)
 	}
-	w.Flush()
+	_ = w.Flush()
 
 	return nil
 }
@@ -225,7 +225,7 @@ func runDescribeNode(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	ctx := context.Background()
 	node, err := store.GetNode(ctx, nodeID)

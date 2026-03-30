@@ -196,7 +196,7 @@ func fetchManifest(url string) (*RemoteManifest, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		// Try without manifest.json (maybe it's a direct manifest)
@@ -204,7 +204,7 @@ func fetchManifest(url string) (*RemoteManifest, error) {
 			baseURL := strings.TrimSuffix(url, "/manifest.json")
 			resp2, err2 := client.Get(baseURL)
 			if err2 == nil && resp2.StatusCode == http.StatusOK {
-				defer resp2.Body.Close()
+				defer func() { _ = resp2.Body.Close() }()
 				body, _ := io.ReadAll(resp2.Body)
 				var manifest RemoteManifest
 				if err := json.Unmarshal(body, &manifest); err == nil {
@@ -292,7 +292,7 @@ func downloadBinary(url, workDir string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("HTTP %d", resp.StatusCode)
@@ -310,7 +310,7 @@ func downloadBinary(url, workDir string) error {
 	if err != nil {
 		return err
 	}
-	defer out.Close()
+	defer func() { _ = out.Close() }()
 
 	_, err = io.Copy(out, resp.Body)
 	if err != nil {

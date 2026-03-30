@@ -23,8 +23,6 @@ var (
 	agentTask        string
 	agentModel       string
 	agentTools       string
-	agentWorkdir     string
-	agentRuntime     string
 	agentDescription string
 	agentTriggers    string
 	agentSkills      string
@@ -77,7 +75,7 @@ func init() {
 	createAgentCmd.Flags().StringVar(&agentSkills, "skills", "", "Skills to enable (comma-separated, e.g., web-search,git,docker)")
 	createAgentCmd.Flags().StringVar(&agentTask, "task", "", "System prompt / task (optional, uses description if not set)")
 	createAgentCmd.Flags().BoolVar(&agentBootstrap, "bootstrap", true, "Generate AI-enhanced system prompt (default: true)")
-	createAgentCmd.MarkFlagRequired("description")
+	_ = createAgentCmd.MarkFlagRequired("description")
 }
 
 func runCreateAgent(cmd *cobra.Command, args []string) error {
@@ -246,7 +244,7 @@ func runGetAgents(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Agents in %s/%s:\n\n", clusterName, namespace)
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "NAME\tMODEL\tDESCRIPTION\tTRIGGERS")
+	_, _ = fmt.Fprintln(w, "NAME\tMODEL\tDESCRIPTION\tTRIGGERS")
 	for _, ag := range agents {
 		desc := truncateStr(ag.Description, 30)
 		triggers := ""
@@ -256,7 +254,7 @@ func runGetAgents(cmd *cobra.Command, args []string) error {
 				triggers = triggers[:17] + "..."
 			}
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", ag.Name, ag.Model, desc, triggers)
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", ag.Name, ag.Model, desc, triggers)
 	}
 	return w.Flush()
 }

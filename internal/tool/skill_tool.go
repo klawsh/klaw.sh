@@ -152,7 +152,7 @@ func (t *SkillTool) installSkill(name string) (*Result, error) {
 			downloadErr = err
 			continue
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		if resp.StatusCode == http.StatusOK {
 			content, err = io.ReadAll(resp.Body)

@@ -309,7 +309,7 @@ func TestLoad_MissingFile(t *testing.T) {
 func TestLoad_InvalidTOML(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.toml")
-	os.WriteFile(configPath, []byte("invalid [[[toml"), 0644)
+	_ = os.WriteFile(configPath, []byte("invalid [[[toml"), 0644)
 	t.Setenv("KLAW_CONFIG", configPath)
 
 	_, err := Load()

@@ -91,7 +91,7 @@ func (t *WebFetch) Execute(ctx context.Context, params json.RawMessage) (*Result
 	if err != nil {
 		return &Result{Content: fmt.Sprintf("Failed to fetch URL: %v", err), IsError: true}, nil
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Check status
 	if resp.StatusCode != http.StatusOK {
@@ -252,7 +252,7 @@ func (t *WebSearch) Execute(ctx context.Context, params json.RawMessage) (*Resul
 	if err != nil {
 		return &Result{Content: fmt.Sprintf("Search failed: %v", err), IsError: true}, nil
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -267,12 +267,12 @@ func (t *WebSearch) Execute(ctx context.Context, params json.RawMessage) (*Resul
 	}
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Search results for: %s\n\n", p.Query))
+	_, _ = fmt.Fprintf(&sb, "Search results for: %s\n\n", p.Query)
 
 	for i, r := range results {
-		sb.WriteString(fmt.Sprintf("%d. %s\n", i+1, r.Title))
-		sb.WriteString(fmt.Sprintf("   URL: %s\n", r.URL))
-		sb.WriteString(fmt.Sprintf("   %s\n\n", r.Snippet))
+		_, _ = fmt.Fprintf(&sb, "%d. %s\n", i+1, r.Title)
+		_, _ = fmt.Fprintf(&sb, "   URL: %s\n", r.URL)
+		_, _ = fmt.Fprintf(&sb, "   %s\n\n", r.Snippet)
 	}
 
 	return &Result{Content: sb.String()}, nil

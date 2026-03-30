@@ -125,24 +125,24 @@ func (c *Client) Connect() error {
 		Version:  "1.0.0",
 	})
 	if err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return fmt.Errorf("failed to send registration: %w", err)
 	}
 
 	// Wait for response
 	msg, err := c.decoder.Decode()
 	if err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return fmt.Errorf("failed to read registration response: %w", err)
 	}
 
 	if msg.Type == "error" {
-		conn.Close()
+		_ = conn.Close()
 		return fmt.Errorf("registration failed: %s", msg.Error)
 	}
 
 	if msg.Type != "registered" {
-		conn.Close()
+		_ = conn.Close()
 		return fmt.Errorf("unexpected response: %s", msg.Type)
 	}
 
@@ -179,7 +179,7 @@ func (c *Client) Stop() error {
 	c.cancel()
 
 	if c.conn != nil {
-		c.conn.Close()
+		_ = c.conn.Close()
 	}
 
 	c.wg.Wait()
@@ -301,7 +301,7 @@ func (c *Client) executeTask(msg *Message) {
 
 	// Send result back
 	c.mu.Lock()
-	c.encoder.Encode(&Message{
+	_ = c.encoder.Encode(&Message{
 		Type:   "task_result",
 		TaskID: msg.TaskID,
 		Result: result,
@@ -322,13 +322,13 @@ func (c *Client) saveNodeID() {
 		return
 	}
 
-	os.MkdirAll(c.config.DataDir, 0755)
+	_ = os.MkdirAll(c.config.DataDir, 0755)
 	data := map[string]string{
 		"node_id":    c.nodeID,
 		"controller": c.config.ControllerAddr,
 	}
 	jsonData, _ := json.MarshalIndent(data, "", "  ")
-	os.WriteFile(filepath.Join(c.config.DataDir, "node.json"), jsonData, 0644)
+	_ = os.WriteFile(filepath.Join(c.config.DataDir, "node.json"), jsonData, 0644)
 }
 
 // GetNodeID returns the node ID

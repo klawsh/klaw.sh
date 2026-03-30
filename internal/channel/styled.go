@@ -21,8 +21,7 @@ var (
 	yellow     = lipgloss.Color("#EAB308")
 	red        = lipgloss.Color("#EF4444")
 	gray       = lipgloss.Color("#6B7280")
-	darkGray   = lipgloss.Color("#374151")
-	white      = lipgloss.Color("#F9FAFB")
+	white = lipgloss.Color("#F9FAFB")
 
 	// Logo/Brand
 	logoStyle = lipgloss.NewStyle().
@@ -45,11 +44,6 @@ var (
 
 	toolOutputStyle = lipgloss.NewStyle().
 		Foreground(gray)
-
-	toolBoxStyle = lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(darkGray).
-		Padding(0, 1)
 
 	// Error style
 	errorStyle = lipgloss.NewStyle().

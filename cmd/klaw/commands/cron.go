@@ -107,9 +107,9 @@ func init() {
 	cronCreateCmd.Flags().StringVarP(&cronAgent, "agent", "a", "", "Agent to run the task (required)")
 	cronCreateCmd.Flags().StringVarP(&cronTask, "task", "t", "", "Task/prompt for the agent (required)")
 	cronCreateCmd.Flags().StringVarP(&cronChannel, "channel", "c", "", "Slack channel ID to read messages from (optional)")
-	cronCreateCmd.MarkFlagRequired("schedule")
-	cronCreateCmd.MarkFlagRequired("agent")
-	cronCreateCmd.MarkFlagRequired("task")
+	_ = cronCreateCmd.MarkFlagRequired("schedule")
+	_ = cronCreateCmd.MarkFlagRequired("agent")
+	_ = cronCreateCmd.MarkFlagRequired("task")
 
 	cronCmd.AddCommand(cronCreateCmd)
 	cronCmd.AddCommand(cronListCmd)
@@ -124,7 +124,7 @@ func init() {
 
 func getScheduler() *scheduler.Scheduler {
 	s := scheduler.NewScheduler(config.StateDir() + "/scheduler")
-	s.Load()
+	_ = s.Load()
 	return s
 }
 
@@ -162,7 +162,7 @@ func runCronCreate(cmd *cobra.Command, args []string) error {
 			job.Config = make(map[string]string)
 		}
 		job.Config["channel"] = cronChannel
-		sched.Save()
+		_ = sched.Save()
 	}
 
 	fmt.Println("✅ Scheduled job created!")
@@ -208,8 +208,8 @@ func runCronList(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Scheduled Jobs in %s/%s:\n\n", clusterName, namespace)
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tNAME\tSCHEDULE\tAGENT\tSTATUS\tNEXT RUN")
-	fmt.Fprintln(w, "--\t----\t--------\t-----\t------\t--------")
+	_, _ = fmt.Fprintln(w, "ID\tNAME\tSCHEDULE\tAGENT\tSTATUS\tNEXT RUN")
+	_, _ = fmt.Fprintln(w, "--\t----\t--------\t-----\t------\t--------")
 
 	for _, job := range jobs {
 		status := "enabled"
@@ -227,10 +227,10 @@ func runCronList(cmd *cobra.Command, args []string) error {
 			scheduleDesc = scheduleDesc[:22] + "..."
 		}
 
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
 			job.ID, job.Name, scheduleDesc, job.Agent, status, nextRun)
 	}
-	w.Flush()
+	_ = w.Flush()
 
 	return nil
 }

@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -28,7 +27,6 @@ var (
 	gray      = lipgloss.Color("#6B7280")
 	darkGray  = lipgloss.Color("#374151")
 	white     = lipgloss.Color("#F9FAFB")
-	black     = lipgloss.Color("#111827")
 )
 
 // Styles
@@ -75,15 +73,6 @@ var (
 			Bold(true).
 			Foreground(white).
 			MarginBottom(1)
-
-	// Stats
-	statValueStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(purple).
-			Width(6)
-
-	statLabelStyle = lipgloss.NewStyle().
-			Foreground(gray)
 
 	// Status badges
 	badgeActive = lipgloss.NewStyle().
@@ -193,8 +182,6 @@ type Model struct {
 	channels    []*cluster.ChannelBinding
 	nodes       []*controller.Node
 	jobs        []*scheduler.Job
-	tasks       []*controller.Task
-
 	// Channel logs for detail view
 	channelLogs []*cluster.MessageLog
 
@@ -562,13 +549,13 @@ func (m Model) handleDelete() (tea.Model, tea.Cmd) {
 	case TabAgents:
 		if m.selectedIndex < len(m.agents) {
 			agent := m.agents[m.selectedIndex]
-			m.store.DeleteAgentBinding(m.clusterName, m.namespace, agent.Name)
+			_ = m.store.DeleteAgentBinding(m.clusterName, m.namespace, agent.Name)
 			return m, m.loadData()
 		}
 	case TabChannels:
 		if m.selectedIndex < len(m.channels) {
 			ch := m.channels[m.selectedIndex]
-			m.store.DeleteChannelBinding(m.clusterName, m.namespace, ch.Name)
+			_ = m.store.DeleteChannelBinding(m.clusterName, m.namespace, ch.Name)
 			return m, m.loadData()
 		}
 	}
@@ -590,7 +577,7 @@ func (m Model) handleToggleStatus() (tea.Model, tea.Cmd) {
 		newStatus = "inactive"
 	}
 
-	m.store.UpdateChannelBindingStatus(m.clusterName, m.namespace, ch.Name, newStatus)
+	_ = m.store.UpdateChannelBindingStatus(m.clusterName, m.namespace, ch.Name, newStatus)
 	return m, m.loadData()
 }
 
@@ -1188,39 +1175,3 @@ func truncate(s string, max int) string {
 	return s
 }
 
-// Key bindings
-type keyMap struct {
-	Quit   key.Binding
-	Tab    key.Binding
-	Create key.Binding
-	Delete key.Binding
-	Enter  key.Binding
-	Escape key.Binding
-}
-
-var keys = keyMap{
-	Quit: key.NewBinding(
-		key.WithKeys("q", "ctrl+c"),
-		key.WithHelp("q", "quit"),
-	),
-	Tab: key.NewBinding(
-		key.WithKeys("tab"),
-		key.WithHelp("tab", "switch tab"),
-	),
-	Create: key.NewBinding(
-		key.WithKeys("n", "c"),
-		key.WithHelp("n", "create"),
-	),
-	Delete: key.NewBinding(
-		key.WithKeys("d"),
-		key.WithHelp("d", "delete"),
-	),
-	Enter: key.NewBinding(
-		key.WithKeys("enter"),
-		key.WithHelp("enter", "select"),
-	),
-	Escape: key.NewBinding(
-		key.WithKeys("esc"),
-		key.WithHelp("esc", "back"),
-	),
-}

@@ -127,7 +127,7 @@ func (a *Anthropic) Stream(ctx context.Context, req *ChatRequest) (<-chan Stream
 
 	go func() {
 		defer close(events)
-		defer stream.Close()
+		defer func() { _ = stream.Close() }()
 
 		var currentToolUse *ToolCall
 		var toolInputBuffer string

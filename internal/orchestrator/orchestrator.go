@@ -36,8 +36,7 @@ type Orchestrator struct {
 	config       Config
 	agents       map[string]*AgentConfig
 	channel      channel.Channel
-	mu           sync.RWMutex
-	runningAgent *agent.Agent
+	mu sync.RWMutex
 }
 
 // AgentConfig holds agent configuration for the orchestrator.
@@ -195,7 +194,7 @@ func (o *Orchestrator) routeWithAI(ctx context.Context, content string) (string,
 	// Build agent descriptions
 	var agentList strings.Builder
 	for name, cfg := range o.agents {
-		agentList.WriteString(fmt.Sprintf("- %s: %s\n", name, cfg.Description))
+		_, _ = fmt.Fprintf(&agentList, "- %s: %s\n", name, cfg.Description)
 	}
 
 	prompt := fmt.Sprintf(`You are a routing assistant. Based on the user's message, determine which agent should handle it.
@@ -266,7 +265,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			// Route to agent(s)
 			agents, err := o.Route(ctx, parsed)
 			if err != nil {
-				o.channel.Send(ctx, &channel.Message{
+				_ = o.channel.Send(ctx, &channel.Message{
 					Role:    "error",
 					Content: fmt.Sprintf("Routing error: %v", err),
 				})
@@ -280,7 +279,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			if len(agents) > 0 {
 				agentName := agents[0]
 				if err := o.runAgent(ctx, agentName, parsed.Content); err != nil {
-					o.channel.Send(ctx, &channel.Message{
+					_ = o.channel.Send(ctx, &channel.Message{
 						Role:    "error",
 						Content: fmt.Sprintf("Agent error: %v", err),
 					})

@@ -131,15 +131,15 @@ func runSkillList(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "NAME\tPATH")
-	fmt.Fprintln(w, "----\t----")
+	_, _ = fmt.Fprintln(w, "NAME\tPATH")
+	_, _ = fmt.Fprintln(w, "----\t----")
 
 	skillsDir := config.ConfigDir() + "/skills"
 	for _, name := range skills {
 		path := filepath.Join(skillsDir, name, "SKILL.md")
-		fmt.Fprintf(w, "%s\t%s\n", name, path)
+		_, _ = fmt.Fprintf(w, "%s\t%s\n", name, path)
 	}
-	w.Flush()
+	_ = w.Flush()
 
 	fmt.Println()
 	fmt.Println("Show skill:    klaw skill show <name>")
@@ -175,12 +175,12 @@ func runSkillBrowse(cmd *cobra.Command, args []string) error {
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "NAME\tDESCRIPTION")
-		fmt.Fprintln(w, "----\t-----------")
+		_, _ = fmt.Fprintln(w, "NAME\tDESCRIPTION")
+		_, _ = fmt.Fprintln(w, "----\t-----------")
 		for _, s := range defaultSkills {
-			fmt.Fprintf(w, "%s\t%s\n", s.name, s.desc)
+			_, _ = fmt.Fprintf(w, "%s\t%s\n", s.name, s.desc)
 		}
-		w.Flush()
+		_ = w.Flush()
 
 		fmt.Println()
 		fmt.Println("Install: klaw skill install <name>")
@@ -191,16 +191,16 @@ func runSkillBrowse(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "NAME\tAUTHOR\tDESCRIPTION")
-	fmt.Fprintln(w, "----\t------\t-----------")
+	_, _ = fmt.Fprintln(w, "NAME\tAUTHOR\tDESCRIPTION")
+	_, _ = fmt.Fprintln(w, "----\t------\t-----------")
 	for _, s := range index.Skills {
 		desc := s.Description
 		if len(desc) > 50 {
 			desc = desc[:47] + "..."
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\n", s.Name, s.Author, desc)
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", s.Name, s.Author, desc)
 	}
-	w.Flush()
+	_ = w.Flush()
 
 	fmt.Println()
 	fmt.Println("Install: klaw skill install <name>")
@@ -222,14 +222,14 @@ func fetchSkillIndex() (*skillIndex, error) {
 	// Try API first
 	resp, err := client.Get(skillsRegistryURL + "/index.json")
 	if err == nil && resp.StatusCode == http.StatusOK {
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		var index skillIndex
 		if err := json.NewDecoder(resp.Body).Decode(&index); err == nil {
 			return &index, nil
 		}
 	}
 	if resp != nil {
-		resp.Body.Close()
+		_ = resp.Body.Close()
 	}
 
 	// Fallback to GitHub
@@ -237,7 +237,7 @@ func fetchSkillIndex() (*skillIndex, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
@@ -305,7 +305,7 @@ func downloadSkillContent(name string) ([]byte, error) {
 		if err != nil {
 			continue
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		if resp.StatusCode == http.StatusOK {
 			return io.ReadAll(resp.Body)
@@ -368,7 +368,7 @@ func runSkillPush(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to push: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusUnauthorized {
 		return fmt.Errorf("invalid API key")
@@ -524,7 +524,7 @@ func runSkillDelete(cmd *cobra.Command, args []string) error {
 	// Confirm deletion
 	fmt.Printf("Delete skill '%s' and all its files? [y/N] ", name)
 	var response string
-	fmt.Scanln(&response)
+	_, _ = fmt.Scanln(&response)
 
 	if strings.ToLower(response) != "y" {
 		fmt.Println("Cancelled.")

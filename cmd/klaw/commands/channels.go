@@ -163,8 +163,8 @@ func runChannelBot(cmd *cobra.Command, args []string) error {
 	}()
 
 	// Update status
-	store.UpdateChannelBindingStatus(clusterName, namespace, name, "active")
-	defer store.UpdateChannelBindingStatus(clusterName, namespace, name, "inactive")
+	_ = store.UpdateChannelBindingStatus(clusterName, namespace, name, "active")
+	defer func() { _ = store.UpdateChannelBindingStatus(clusterName, namespace, name, "inactive") }()
 
 	// Start channel
 	if err := ch.Start(ctx); err != nil {

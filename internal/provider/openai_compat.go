@@ -178,7 +178,7 @@ func (p *OpenAICompatProvider) buildTools(tools []ToolDefinition) []openai.ChatC
 
 	for _, t := range tools {
 		var schema openai.FunctionParameters
-		json.Unmarshal(t.InputSchema, &schema)
+		_ = json.Unmarshal(t.InputSchema, &schema)
 
 		param := openai.ChatCompletionToolParam{
 			Type: "function",

@@ -32,7 +32,7 @@ func (ac *ApprovalConfig) NeedsApproval(toolName string) bool {
 func RequestApproval(ctx context.Context, ch channel.Channel, tc provider.ToolCall) (bool, error) {
 	// Show what we're asking approval for
 	prompt := fmt.Sprintf("\n⚠ Tool '%s' requires approval. Execute? [y/N]: ", tc.Name)
-	ch.Send(ctx, &channel.Message{
+	_ = ch.Send(ctx, &channel.Message{
 		Role:    "assistant",
 		Content: prompt,
 	})

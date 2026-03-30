@@ -186,9 +186,9 @@ func (s *SlackChannel) buildContextFromHistory(history *ThreadHistory) string {
 	for i := start; i < len(history.Messages)-1; i++ {
 		msg := history.Messages[i]
 		if msg.Role == "user" {
-			sb.WriteString(fmt.Sprintf("User: %s\n", msg.Content))
+			fmt.Fprintf(&sb, "User: %s\n", msg.Content)
 		} else {
-			sb.WriteString(fmt.Sprintf("Assistant: %s\n", msg.Content))
+			fmt.Fprintf(&sb, "Assistant: %s\n", msg.Content)
 		}
 	}
 
@@ -536,18 +536,18 @@ func (s *SlackChannel) sendHelp(channelID string) {
 		),
 	}
 
-	s.client.PostMessage(channelID, slack.MsgOptionBlocks(blocks...))
+	_, _, _ = s.client.PostMessage(channelID, slack.MsgOptionBlocks(blocks...))
 }
 
 func (s *SlackChannel) listAgents(channelID string) {
 	if s.agentManager == nil {
-		s.client.PostMessage(channelID, slack.MsgOptionText("❌ Agent management not configured", false))
+		_, _, _ = s.client.PostMessage(channelID, slack.MsgOptionText("❌ Agent management not configured", false))
 		return
 	}
 
 	agents, err := s.agentManager.ListAgents()
 	if err != nil {
-		s.client.PostMessage(channelID, slack.MsgOptionText(fmt.Sprintf("❌ Error: %v", err), false))
+		_, _, _ = s.client.PostMessage(channelID, slack.MsgOptionText(fmt.Sprintf("❌ Error: %v", err), false))
 		return
 	}
 
@@ -562,7 +562,7 @@ func (s *SlackChannel) listAgents(channelID string) {
 				slack.NewButtonBlockElement("create_agent_btn", "create_agent", slack.NewTextBlockObject("plain_text", "➕ Create Your First Agent", true, false)).WithStyle(slack.StylePrimary),
 			),
 		}
-		s.client.PostMessage(channelID, slack.MsgOptionBlocks(blocks...))
+		_, _, _ = s.client.PostMessage(channelID, slack.MsgOptionBlocks(blocks...))
 		return
 	}
 
@@ -606,7 +606,7 @@ func (s *SlackChannel) listAgents(channelID string) {
 		slack.NewButtonBlockElement("create_agent_btn", "create_agent", slack.NewTextBlockObject("plain_text", "➕ Create Agent", true, false)).WithStyle(slack.StylePrimary),
 	))
 
-	s.client.PostMessage(channelID, slack.MsgOptionBlocks(blocks...))
+	_, _, _ = s.client.PostMessage(channelID, slack.MsgOptionBlocks(blocks...))
 }
 
 func (s *SlackChannel) openCreateAgentModal(triggerID string) {
@@ -829,7 +829,7 @@ func (s *SlackChannel) handleCreateAgentSubmission(callback slack.InteractionCal
 
 	if err != nil {
 		if channel != nil {
-			s.client.PostMessage(channel.ID, slack.MsgOptionText(fmt.Sprintf("❌ Failed to create agent: %v", err), false))
+			_, _, _ = s.client.PostMessage(channel.ID, slack.MsgOptionText(fmt.Sprintf("❌ Failed to create agent: %v", err), false))
 		}
 		return
 	}
@@ -857,7 +857,7 @@ func (s *SlackChannel) handleCreateAgentSubmission(callback slack.InteractionCal
 	}
 
 	if channel != nil {
-		s.client.PostMessage(channel.ID, slack.MsgOptionBlocks(blocks...))
+		_, _, _ = s.client.PostMessage(channel.ID, slack.MsgOptionBlocks(blocks...))
 	}
 }
 
@@ -890,7 +890,7 @@ func (s *SlackChannel) confirmDeleteAgent(triggerID, agentName string) {
 		},
 	}
 
-	s.client.OpenView(triggerID, modalRequest)
+	_, _ = s.client.OpenView(triggerID, modalRequest)
 }
 
 func (s *SlackChannel) openEditAgentModal(triggerID, agentName string) {
@@ -910,17 +910,17 @@ func (s *SlackChannel) openEditAgentModal(triggerID, agentName string) {
 
 func (s *SlackChannel) deleteAgent(channelID, agentName string) {
 	if s.agentManager == nil {
-		s.client.PostMessage(channelID, slack.MsgOptionText("❌ Agent management not configured", false))
+		_, _, _ = s.client.PostMessage(channelID, slack.MsgOptionText("❌ Agent management not configured", false))
 		return
 	}
 
 	err := s.agentManager.DeleteAgent(agentName)
 	if err != nil {
-		s.client.PostMessage(channelID, slack.MsgOptionText(fmt.Sprintf("❌ Failed to delete agent: %v", err), false))
+		_, _, _ = s.client.PostMessage(channelID, slack.MsgOptionText(fmt.Sprintf("❌ Failed to delete agent: %v", err), false))
 		return
 	}
 
-	s.client.PostMessage(channelID, slack.MsgOptionText(fmt.Sprintf("✅ Agent *%s* deleted successfully", agentName), false))
+	_, _, _ = s.client.PostMessage(channelID, slack.MsgOptionText(fmt.Sprintf("✅ Agent *%s* deleted successfully", agentName), false))
 }
 
 func (s *SlackChannel) Send(ctx context.Context, msg *Message) error {
@@ -940,7 +940,7 @@ func (s *SlackChannel) Send(ctx context.Context, msg *Message) error {
 				nil, nil,
 			),
 		}
-		s.client.PostMessage(
+		_, _, _ = s.client.PostMessage(
 			channel,
 			slack.MsgOptionBlocks(blocks...),
 			slack.MsgOptionTS(threadTS),
@@ -989,7 +989,7 @@ func (s *SlackChannel) Send(ctx context.Context, msg *Message) error {
 
 		// Update existing message or post new
 		if lastTS != "" {
-			s.client.UpdateMessage(
+			_, _, _, _ = s.client.UpdateMessage(
 				channel,
 				lastTS,
 				slack.MsgOptionBlocks(blocks...),
@@ -1029,39 +1029,6 @@ func (s *SlackChannel) Send(ctx context.Context, msg *Message) error {
 	return err
 }
 
-func (s *SlackChannel) formatForSlack(text string) string {
-	// Convert tool output format to Slack code blocks
-	lines := strings.Split(text, "\n")
-	var result []string
-	inToolBlock := false
-
-	for _, line := range lines {
-		if strings.HasPrefix(line, "╭─ ") {
-			// Tool header
-			toolName := strings.TrimPrefix(line, "╭─ ")
-			result = append(result, fmt.Sprintf("*:zap: %s*", toolName))
-			result = append(result, "```")
-			inToolBlock = true
-		} else if strings.HasPrefix(line, "│ ") {
-			// Tool output line
-			result = append(result, strings.TrimPrefix(line, "│ "))
-		} else if strings.HasPrefix(line, "╰─") {
-			// Tool end
-			if inToolBlock {
-				result = append(result, "```")
-				inToolBlock = false
-			}
-		} else {
-			result = append(result, line)
-		}
-	}
-
-	if inToolBlock {
-		result = append(result, "```")
-	}
-
-	return strings.Join(result, "\n")
-}
 
 // buildSlackBlocks creates rich Slack blocks from text content
 func (s *SlackChannel) buildSlackBlocks(text string) []slack.Block {
@@ -1409,6 +1376,6 @@ func parseSlackTimestamp(ts string) (time.Time, error) {
 	}
 
 	secs := int64(0)
-	fmt.Sscanf(parts[0], "%d", &secs)
+	_, _ = fmt.Sscanf(parts[0], "%d", &secs)
 	return time.Unix(secs, 0), nil
 }

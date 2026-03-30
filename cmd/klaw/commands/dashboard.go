@@ -51,7 +51,7 @@ func runDashboard(cmd *cobra.Command, args []string) error {
 
 	// Create scheduler
 	sched := scheduler.NewScheduler(config.StateDir() + "/scheduler")
-	sched.Load()
+	_ = sched.Load()
 
 	// Create and run dashboard
 	m := tui.NewDashboard(store, sched, clusterName, namespace)

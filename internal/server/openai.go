@@ -249,9 +249,9 @@ func (s *Server) handleStreamingRequest(
 		// Persist history to session if session-based
 		if sess != nil {
 			sess.history = ag.History()
-			sess.save()
+			_ = sess.save()
 		}
-		ch.Stop()
+		_ = ch.Stop()
 	}()
 
 	// Heartbeat ticker for long-running tool executions
@@ -272,7 +272,7 @@ func (s *Server) handleStreamingRequest(
 
 		case <-heartbeat.C:
 			// SSE comment to keep connection alive
-			fmt.Fprintf(w, ": heartbeat\n\n")
+			_, _ = fmt.Fprintf(w, ": heartbeat\n\n")
 			flusher.Flush()
 
 		case <-r.Context().Done():
@@ -362,9 +362,9 @@ func (s *Server) handleNonStreamingRequest(
 		// Persist history to session if session-based
 		if sess != nil {
 			sess.history = ag.History()
-			sess.save()
+			_ = sess.save()
 		}
-		ch.Stop()
+		_ = ch.Stop()
 	}()
 
 	// Collect all output
@@ -389,7 +389,7 @@ func (s *Server) handleNonStreamingRequest(
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(completionResponse{
+	_ = json.NewEncoder(w).Encode(completionResponse{
 		ID:      requestID,
 		Object:  "chat.completion",
 		Created: time.Now().Unix(),
@@ -499,20 +499,20 @@ func sendFinish(w http.ResponseWriter, flusher http.Flusher, requestID, modelID,
 			FinishReason: &finishReason,
 		}},
 	})
-	fmt.Fprintf(w, "data: [DONE]\n\n")
+	_, _ = fmt.Fprintf(w, "data: [DONE]\n\n")
 	flusher.Flush()
 }
 
 func writeSSE(w http.ResponseWriter, flusher http.Flusher, chunk streamChunk) {
 	data, _ := json.Marshal(chunk)
-	fmt.Fprintf(w, "data: %s\n\n", data)
+	_, _ = fmt.Fprintf(w, "data: %s\n\n", data)
 	flusher.Flush()
 }
 
 func writeAPIError(w http.ResponseWriter, status int, errType, code, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(apiError{
+	_ = json.NewEncoder(w).Encode(apiError{
 		Error: apiErrorBody{
 			Message: message,
 			Type:    errType,

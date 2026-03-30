@@ -41,7 +41,7 @@ func (s *DefinitionStore) Save(def *Definition) error {
 	if err != nil {
 		return fmt.Errorf("failed to create agent file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	encoder := toml.NewEncoder(f)
 	return encoder.Encode(def)
