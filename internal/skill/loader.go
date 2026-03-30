@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -51,35 +50,46 @@ func (l *SkillLoader) LoadSkill(name string) (string, error) {
 	return string(content), nil
 }
 
-// InstallSkill installs a skill from the registry.
+// InstallSkill installs a skill from the registry via HTTP.
 // Format: "skill-name" or "org/skill-name"
 func (l *SkillLoader) InstallSkill(name string) error {
 	skillDir := filepath.Join(l.skillsDir, name)
+	skillPath := filepath.Join(skillDir, "SKILL.md")
 
-	// Create skill directory
-	if err := os.MkdirAll(skillDir, 0755); err != nil {
-		return err
+	// Try multiple sources
+	urls := []string{
+		fmt.Sprintf("https://skills.sh/%s/SKILL.md", name),
+		fmt.Sprintf("https://raw.githubusercontent.com/eachlabs/klaw-skills/main/%s/SKILL.md", name),
+		fmt.Sprintf("https://skills.klaw.dev/%s/SKILL.md", name),
 	}
 
-	// Try npx first (for npm-based skills)
-	// Format: npx @klaw/skill-<name> --output <skillDir>
-	npmName := fmt.Sprintf("@klaw/skill-%s", strings.ReplaceAll(name, "/", "-"))
-	cmd := exec.Command("npx", npmName, "--output", skillDir)
-	if err := cmd.Run(); err == nil {
-		return nil
+	client := &http.Client{Timeout: 30 * time.Second}
+	var lastErr error
+
+	for _, url := range urls {
+		resp, err := client.Get(url)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		if resp.StatusCode == http.StatusOK {
+			content, err := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			if err != nil {
+				lastErr = err
+				continue
+			}
+			if err := os.MkdirAll(skillDir, 0755); err != nil {
+				return err
+			}
+			return os.WriteFile(skillPath, content, 0644)
+		}
+		resp.Body.Close()
+		lastErr = fmt.Errorf("HTTP %d from %s", resp.StatusCode, url)
 	}
 
-	// Try curl from skills.klaw.dev
-	skillURL := fmt.Sprintf("https://skills.klaw.dev/%s/SKILL.md", name)
-	curlCmd := exec.Command("curl", "-fsSL", "-o", filepath.Join(skillDir, "SKILL.md"), skillURL)
-	if err := curlCmd.Run(); err == nil {
-		return nil
-	}
-
-	// Clean up empty directory on failure
-	os.RemoveAll(skillDir)
-
-	return fmt.Errorf("could not install skill '%s' from any source", name)
+	return fmt.Errorf("could not install skill '%s': %w", name, lastErr)
 }
 
 // ListSkills returns all installed skills.
