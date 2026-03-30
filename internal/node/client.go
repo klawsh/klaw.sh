@@ -211,7 +211,7 @@ func (c *Client) RegisterAgent(name, cluster, namespace, description, model stri
 	}
 
 	if msg.Type == "error" {
-		return "", fmt.Errorf(msg.Error)
+		return "", fmt.Errorf("%s", msg.Error)
 	}
 
 	return msg.AgentID, nil

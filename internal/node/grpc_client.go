@@ -146,7 +146,7 @@ func (c *GRPCClient) RegisterAgent(name, cluster, namespace, description, model 
 	}
 
 	if resp.Error != "" {
-		return "", fmt.Errorf(resp.Error)
+		return "", fmt.Errorf("%s", resp.Error)
 	}
 
 	return resp.AgentId, nil
