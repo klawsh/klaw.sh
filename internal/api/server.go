@@ -19,6 +19,7 @@ type ServerConfig struct {
 	Port       int
 	Workers    int
 	MaxTimeout time.Duration
+	NoAuth     bool
 }
 
 // Server is the Creative Agent HTTP API server.
@@ -62,7 +63,11 @@ func (s *Server) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/v1/tasks/", s.handleGetTask)
 	mux.HandleFunc("/api/v1/health", s.handleHealth)
 
-	handler := s.corsMiddleware(s.auth.Middleware(mux))
+	var handler http.Handler = mux
+	if !s.cfg.NoAuth && s.auth != nil {
+		handler = s.auth.Middleware(handler)
+	}
+	handler = s.corsMiddleware(handler)
 
 	addr := fmt.Sprintf("%s:%d", s.cfg.Host, s.cfg.Port)
 	s.server = &http.Server{

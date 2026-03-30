@@ -50,10 +50,13 @@
 | `klaw api start --help` | ✅ |
 | `klaw api-key --help` | ✅ |
 | `klaw api-key create --name test` | ✅ Creates `klk_` prefixed key |
-| `klaw api start` | ⏳ Pending manual test (needs API key) |
-| `curl POST /api/v1/run` | ⏳ Pending end-to-end test |
-| `curl GET /api/v1/health` | ⏳ Pending end-to-end test |
-| `curl GET /api/v1/tasks/{id}` | ⏳ Pending end-to-end test |
+| `klaw api start --no-auth` | ✅ Server starts, banner shown |
+| `curl POST /api/v1/run` | ✅ SSE stream: status → text → done |
+| `curl GET /api/v1/health` | ✅ Returns `{"status":"ok","active_tasks":0}` |
+| `curl GET /api/v1/tasks/{id}` | ✅ Returns task state |
+| Auth middleware (no key) | ✅ Returns 401 |
+| `--no-auth` bypass | ✅ Skips auth |
+| Model override via request | ✅ `ChatRequest.Model` propagated to provider |
 
 ## Cleanup Verification
 | Item | Result |

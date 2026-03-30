@@ -211,6 +211,7 @@ func runAPIStart(cmd *cobra.Command, args []string) error {
 		Port:       port,
 		Workers:    workers,
 		MaxTimeout: maxTimeout,
+		NoAuth:     apiNoAuth,
 	}, prov, auth)
 
 	// Signal handling

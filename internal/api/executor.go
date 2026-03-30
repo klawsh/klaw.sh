@@ -211,12 +211,14 @@ func (e *Executor) Run(ctx context.Context, w http.ResponseWriter, req *RunReque
 	} else {
 		state.Status = "completed"
 		state.Result = result
+		e.tasksMu.Unlock()
 		writeEvent("done", map[string]any{
 			"task_id": taskID,
 			"status":  "completed",
 			"result":  result,
 			"usage":   usage,
 		})
+		return
 	}
 	e.tasksMu.Unlock()
 }
@@ -296,6 +298,7 @@ func (e *Executor) runAgent(ctx context.Context, req *RunRequest, taskID string,
 
 		// Stream from provider
 		events, err := e.provider.Stream(ctx, &provider.ChatRequest{
+			Model:     req.Model,
 			System:    systemPrompt,
 			Messages:  messages,
 			Tools:     toolDefs,
@@ -318,7 +321,9 @@ func (e *Executor) runAgent(ctx context.Context, req *RunRequest, taskID string,
 					"content": event.Text,
 				})
 			case "tool_use":
-				toolCalls = append(toolCalls, *event.ToolUse)
+				if event.ToolUse != nil {
+					toolCalls = append(toolCalls, *event.ToolUse)
+				}
 			case "error":
 				streamErr = event.Error
 			case "stop":
@@ -327,6 +332,11 @@ func (e *Executor) runAgent(ctx context.Context, req *RunRequest, taskID string,
 					usage.OutputTokens += event.Usage.OutputTokens
 				}
 			}
+		}
+
+		// Ensure we got past the stream
+		if ctx.Err() != nil {
+			return nil, usage, &TaskError{Code: "timeout", Message: "agent timed out during streaming"}
 		}
 
 		if streamErr != nil {

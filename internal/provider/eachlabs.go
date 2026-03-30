@@ -105,8 +105,13 @@ func (e *EachLabsProvider) Chat(ctx context.Context, req *ChatRequest) (*ChatRes
 		maxTokens = 8192
 	}
 
+	model := e.model
+	if req.Model != "" {
+		model = req.Model
+	}
+
 	params := openai.ChatCompletionNewParams{
-		Model:    e.model,
+		Model:    model,
 		Messages: messages,
 	}
 	params.MaxTokens = openai.Int(int64(maxTokens))

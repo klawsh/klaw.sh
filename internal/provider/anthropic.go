@@ -72,7 +72,7 @@ func (a *Anthropic) Chat(ctx context.Context, req *ChatRequest) (*ChatResponse, 
 	}
 
 	params := anthropic.MessageNewParams{
-		Model:     anthropic.F(anthropic.Model(a.model)),
+		Model:     anthropic.F(anthropic.Model(a.resolveModel(req.Model))),
 		MaxTokens: anthropic.F(int64(maxTokens)),
 		Messages:  anthropic.F(messages),
 	}
@@ -106,7 +106,7 @@ func (a *Anthropic) Stream(ctx context.Context, req *ChatRequest) (<-chan Stream
 	}
 
 	params := anthropic.MessageNewParams{
-		Model:     anthropic.F(anthropic.Model(a.model)),
+		Model:     anthropic.F(anthropic.Model(a.resolveModel(req.Model))),
 		MaxTokens: anthropic.F(int64(maxTokens)),
 		Messages:  anthropic.F(messages),
 	}
@@ -192,6 +192,13 @@ func (a *Anthropic) Stream(ctx context.Context, req *ChatRequest) (<-chan Stream
 	}()
 
 	return events, nil
+}
+
+func (a *Anthropic) resolveModel(override string) string {
+	if override != "" {
+		return override
+	}
+	return a.model
 }
 
 func (a *Anthropic) buildMessages(msgs []Message) []anthropic.MessageParam {
