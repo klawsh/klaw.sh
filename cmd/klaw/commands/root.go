@@ -40,6 +40,7 @@ func init() {
 	rootCmd.AddCommand(describeCmd)
 	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(initCmd)
+	rootCmd.AddCommand(upgradeCmd)
 }
 
 func Execute(ver string) error {
