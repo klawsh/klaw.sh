@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
-	"github.com/eachlabs/klaw/internal/cluster"
 	"github.com/eachlabs/klaw/internal/config"
 	"github.com/spf13/cobra"
 )
@@ -22,10 +21,7 @@ Subcommands:
   get [key]              Show configuration value(s)
   set <key> <value>      Set a configuration value
   edit                   Open config in $EDITOR
-  path                   Show config file path
-  use-cluster <name>     Switch to a cluster
-  use-namespace <name>   Switch to a namespace
-  current-context        Show current cluster/namespace`,
+  path                   Show config file path`,
 }
 
 func init() {
@@ -33,20 +29,11 @@ func init() {
 	configCmd.AddCommand(configSetCmd)
 	configCmd.AddCommand(configEditCmd)
 	configCmd.AddCommand(configPathCmd)
-	configCmd.AddCommand(useClusterCmd)
-	configCmd.AddCommand(useNamespaceCmd)
-	configCmd.AddCommand(currentContextCmd)
 }
 
 var configGetCmd = &cobra.Command{
 	Use:   "get [key]",
 	Short: "Show configuration",
-	Long: `Show configuration values.
-
-Examples:
-  klaw config get                    # Show all config
-  klaw config get provider.anthropic.api_key
-  klaw config get defaults.model`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
 		if err != nil {
@@ -54,18 +41,15 @@ Examples:
 		}
 
 		if len(args) == 0 {
-			// Show all config
 			if jsonOut {
 				enc := json.NewEncoder(os.Stdout)
 				enc.SetIndent("", "  ")
 				return enc.Encode(cfg)
 			}
-
 			enc := toml.NewEncoder(os.Stdout)
 			return enc.Encode(cfg)
 		}
 
-		// Get specific key
 		key := args[0]
 		value := getConfigValue(cfg, key)
 		if value == nil {
@@ -73,10 +57,8 @@ Examples:
 		}
 
 		if jsonOut {
-			enc := json.NewEncoder(os.Stdout)
-			return enc.Encode(value)
+			return json.NewEncoder(os.Stdout).Encode(value)
 		}
-
 		fmt.Printf("%v\n", value)
 		return nil
 	},
@@ -93,19 +75,7 @@ func getConfigValue(cfg *config.Config, key string) interface{} {
 		switch parts[1] {
 		case "model":
 			return cfg.Defaults.Model
-		case "agent":
-			return cfg.Defaults.Agent
 		}
-
-	case "workspace":
-		if len(parts) == 1 {
-			return cfg.Workspace
-		}
-		switch parts[1] {
-		case "path":
-			return cfg.Workspace.Path
-		}
-
 	case "provider":
 		if len(parts) == 1 {
 			return cfg.Provider
@@ -127,38 +97,20 @@ func getConfigValue(cfg *config.Config, key string) interface{} {
 				return p.Model
 			}
 		}
-
-	case "channel":
+	case "api":
 		if len(parts) == 1 {
-			return cfg.Channel
-		}
-		if len(parts) >= 2 {
-			ch, ok := cfg.Channel[parts[1]]
-			if !ok {
-				return nil
-			}
-			if len(parts) == 2 {
-				return ch
-			}
-			switch parts[2] {
-			case "enabled":
-				return ch.Enabled
-			case "token":
-				return maskToken(ch.Token)
-			}
-		}
-
-	case "server":
-		if len(parts) == 1 {
-			return cfg.Server
+			return cfg.API
 		}
 		switch parts[1] {
 		case "port":
-			return cfg.Server.Port
+			return cfg.API.Port
 		case "host":
-			return cfg.Server.Host
+			return cfg.API.Host
+		case "workers":
+			return cfg.API.Workers
+		case "max_timeout":
+			return cfg.API.MaxTimeout
 		}
-
 	case "logging":
 		if len(parts) == 1 {
 			return cfg.Logging
@@ -170,20 +122,20 @@ func getConfigValue(cfg *config.Config, key string) interface{} {
 			return cfg.Logging.File
 		}
 	}
-
 	return nil
+}
+
+func maskToken(token string) string {
+	if len(token) <= 8 {
+		return "***"
+	}
+	return token[:8] + "..."
 }
 
 var configSetCmd = &cobra.Command{
 	Use:   "set <key> <value>",
 	Short: "Set a configuration value",
-	Long: `Set a configuration value.
-
-Examples:
-  klaw config set defaults.model claude-opus-4-20250514
-  klaw config set provider.anthropic.api_key sk-ant-...
-  klaw config set server.port 9090`,
-	Args: cobra.ExactArgs(2),
+	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		key := args[0]
 		value := args[1]
@@ -217,18 +169,9 @@ func setConfigValue(cfg *config.Config, key, value string) error {
 		switch parts[1] {
 		case "model":
 			cfg.Defaults.Model = value
-		case "agent":
-			cfg.Defaults.Agent = value
 		default:
 			return fmt.Errorf("unknown key: %s", key)
 		}
-
-	case "workspace":
-		if len(parts) != 2 || parts[1] != "path" {
-			return fmt.Errorf("invalid key: %s", key)
-		}
-		cfg.Workspace.Path = value
-
 	case "provider":
 		if len(parts) != 3 {
 			return fmt.Errorf("invalid key: %s (use provider.<name>.<field>)", key)
@@ -245,25 +188,7 @@ func setConfigValue(cfg *config.Config, key, value string) error {
 			return fmt.Errorf("unknown field: %s", parts[2])
 		}
 		cfg.Provider[parts[1]] = p
-
-	case "channel":
-		if len(parts) != 3 {
-			return fmt.Errorf("invalid key: %s (use channel.<name>.<field>)", key)
-		}
-		ch := cfg.Channel[parts[1]]
-		switch parts[2] {
-		case "enabled":
-			ch.Enabled = value == "true"
-		case "token":
-			ch.Token = value
-		case "guild_id":
-			ch.GuildID = value
-		default:
-			return fmt.Errorf("unknown field: %s", parts[2])
-		}
-		cfg.Channel[parts[1]] = ch
-
-	case "server":
+	case "api":
 		if len(parts) != 2 {
 			return fmt.Errorf("invalid key: %s", key)
 		}
@@ -271,13 +196,16 @@ func setConfigValue(cfg *config.Config, key, value string) error {
 		case "port":
 			var port int
 			_, _ = fmt.Sscanf(value, "%d", &port)
-			cfg.Server.Port = port
+			cfg.API.Port = port
 		case "host":
-			cfg.Server.Host = value
+			cfg.API.Host = value
+		case "workers":
+			var w int
+			_, _ = fmt.Sscanf(value, "%d", &w)
+			cfg.API.Workers = w
 		default:
 			return fmt.Errorf("unknown field: %s", parts[1])
 		}
-
 	case "logging":
 		if len(parts) != 2 {
 			return fmt.Errorf("invalid key: %s", key)
@@ -290,11 +218,9 @@ func setConfigValue(cfg *config.Config, key, value string) error {
 		default:
 			return fmt.Errorf("unknown field: %s", parts[1])
 		}
-
 	default:
 		return fmt.Errorf("unknown section: %s", parts[0])
 	}
-
 	return nil
 }
 
@@ -309,7 +235,6 @@ var configEditCmd = &cobra.Command{
 
 		configPath := config.ConfigPath()
 
-		// Ensure config exists
 		cfg, err := config.Load()
 		if err != nil {
 			return err
@@ -322,7 +247,6 @@ var configEditCmd = &cobra.Command{
 		c.Stdin = os.Stdin
 		c.Stdout = os.Stdout
 		c.Stderr = os.Stderr
-
 		return c.Run()
 	},
 }
@@ -332,102 +256,5 @@ var configPathCmd = &cobra.Command{
 	Short: "Show config file path",
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println(config.ConfigPath())
-	},
-}
-
-// --- Context switching commands ---
-
-var useClusterCmd = &cobra.Command{
-	Use:   "use-cluster <name>",
-	Short: "Switch to a cluster",
-	Long: `Switch the current context to a cluster.
-
-Examples:
-  klaw config use-cluster acme-corp`,
-	Args: cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		name := args[0]
-
-		store := cluster.NewStore(config.StateDir())
-		ctxMgr := cluster.NewContextManager(config.ConfigDir())
-
-		// Verify cluster exists
-		if !store.ClusterExists(name) {
-			return fmt.Errorf("cluster not found: %s", name)
-		}
-
-		if err := ctxMgr.SetCluster(name); err != nil {
-			return err
-		}
-
-		fmt.Printf("Switched to cluster '%s' (namespace: default)\n", name)
-		return nil
-	},
-}
-
-var useNamespaceCmd = &cobra.Command{
-	Use:     "use-namespace <name>",
-	Aliases: []string{"use-ns"},
-	Short:   "Switch to a namespace",
-	Long: `Switch the current namespace within the current cluster.
-
-Examples:
-  klaw config use-namespace marketing
-  klaw config use-ns sales`,
-	Args: cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		name := args[0]
-
-		store := cluster.NewStore(config.StateDir())
-		ctxMgr := cluster.NewContextManager(config.ConfigDir())
-
-		// Get current cluster
-		clusterName, _, err := ctxMgr.RequireCurrent()
-		if err != nil {
-			return err
-		}
-
-		// Verify namespace exists
-		if !store.NamespaceExists(clusterName, name) {
-			return fmt.Errorf("namespace not found: %s/%s", clusterName, name)
-		}
-
-		if err := ctxMgr.SetNamespace(name); err != nil {
-			return err
-		}
-
-		fmt.Printf("Switched to namespace '%s' in cluster '%s'\n", name, clusterName)
-		return nil
-	},
-}
-
-var currentContextCmd = &cobra.Command{
-	Use:     "current-context",
-	Aliases: []string{"ctx"},
-	Short:   "Show current cluster/namespace",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		ctxMgr := cluster.NewContextManager(config.ConfigDir())
-
-		clusterName, namespace, err := ctxMgr.GetCurrent()
-		if err != nil {
-			return err
-		}
-
-		if clusterName == "" {
-			fmt.Println("No cluster selected.")
-			fmt.Println("Create one with: klaw create cluster <name>")
-			return nil
-		}
-
-		if jsonOut {
-			return json.NewEncoder(os.Stdout).Encode(map[string]string{
-				"cluster":   clusterName,
-				"namespace": namespace,
-			})
-		}
-
-		fmt.Printf("Cluster:   %s\n", clusterName)
-		fmt.Printf("Namespace: %s\n", namespace)
-		return nil
 	},
 }

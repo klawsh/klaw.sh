@@ -14,15 +14,13 @@ var (
 
 var rootCmd = &cobra.Command{
 	Use:   "klaw",
-	Short: "klaw - lightweight AI assistant",
-	Long: `klaw is a minimal, fast, single-binary AI assistant.
+	Short: "klaw - Creative Agent Runtime",
+	Long: `klaw is a stateless creative agent runtime for each::labs.
 
-kubectl-style commands for AI:
+  klaw api start         Start the HTTP API server
+  klaw api-key create    Create an API key
   klaw chat              Interactive terminal chat
-  klaw get <resource>    List resources
-  klaw create <resource> Create a resource
-  klaw delete <resource> Delete a resource
-  klaw describe <resource> Show resource details
+  klaw upgrade           Self-update to latest version
   klaw config            Manage configuration`,
 }
 
@@ -31,16 +29,13 @@ func init() {
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output")
 	rootCmd.PersistentFlags().BoolVar(&jsonOut, "json", false, "output as JSON")
 
-	// Add commands
 	rootCmd.AddCommand(chatCmd)
 	rootCmd.AddCommand(versionCmd)
-	rootCmd.AddCommand(getCmd)
-	rootCmd.AddCommand(createCmd)
-	rootCmd.AddCommand(deleteCmd)
-	rootCmd.AddCommand(describeCmd)
 	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(upgradeCmd)
+	rootCmd.AddCommand(apiCmd)
+	rootCmd.AddCommand(apiKeyCmd)
 }
 
 func Execute(ver string) error {

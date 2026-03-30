@@ -13,12 +13,18 @@ import (
 
 // Bash executes shell commands.
 type Bash struct {
-	workDir string
+	workDir  string
+	extraEnv map[string]string
 }
 
 // NewBash creates a new bash tool.
 func NewBash(workDir string) *Bash {
 	return &Bash{workDir: workDir}
+}
+
+// NewBashWithEnv creates a bash tool with additional environment variables.
+func NewBashWithEnv(workDir string, env map[string]string) *Bash {
+	return &Bash{workDir: workDir, extraEnv: env}
 }
 
 func (b *Bash) Name() string {
@@ -74,6 +80,9 @@ func (b *Bash) Execute(ctx context.Context, params json.RawMessage) (*Result, er
 	cmd := exec.CommandContext(ctx, "bash", "-c", p.Command)
 	cmd.Dir = b.workDir
 	cmd.Env = os.Environ()
+	for k, v := range b.extraEnv {
+		cmd.Env = append(cmd.Env, k+"="+v)
+	}
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

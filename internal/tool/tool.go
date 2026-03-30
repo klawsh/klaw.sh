@@ -9,16 +9,9 @@ import (
 
 // Tool is any capability the agent can invoke.
 type Tool interface {
-	// Name returns the tool name (e.g., "bash", "read").
 	Name() string
-
-	// Description returns a human-readable description.
 	Description() string
-
-	// Schema returns the JSON Schema for tool parameters.
 	Schema() json.RawMessage
-
-	// Execute runs the tool with the given parameters.
 	Execute(ctx context.Context, params json.RawMessage) (*Result, error)
 }
 
@@ -35,9 +28,7 @@ type Registry struct {
 
 // NewRegistry creates a new tool registry.
 func NewRegistry() *Registry {
-	return &Registry{
-		tools: make(map[string]Tool),
-	}
+	return &Registry{tools: make(map[string]Tool)}
 }
 
 // Register adds a tool to the registry.
@@ -61,7 +52,6 @@ func (r *Registry) All() []Tool {
 }
 
 // Filter returns a new registry containing only the named tools.
-// If allowlist is empty, the original registry is returned.
 func (r *Registry) Filter(allowlist []string) *Registry {
 	if len(allowlist) == 0 {
 		return r
@@ -85,13 +75,8 @@ func (r *Registry) Names() []string {
 	return names
 }
 
-// DefaultRegistry returns a registry with all standard tools.
+// DefaultRegistry returns a registry with standard tools.
 func DefaultRegistry(workDir string) *Registry {
-	return DefaultRegistryWithScheduler(workDir, nil)
-}
-
-// DefaultRegistryWithScheduler returns a registry with all standard tools and a shared scheduler.
-func DefaultRegistryWithScheduler(workDir string, sched interface{}) *Registry {
 	r := NewRegistry()
 	r.Register(NewBash(workDir))
 	r.Register(NewRead(workDir))
@@ -99,12 +84,21 @@ func DefaultRegistryWithScheduler(workDir string, sched interface{}) *Registry {
 	r.Register(NewEdit(workDir))
 	r.Register(NewGlob(workDir))
 	r.Register(NewGrep(workDir))
-	r.Register(NewSkillTool())
 	r.Register(NewWebFetch())
 	r.Register(NewWebSearch())
-	r.Register(NewAgentTool())
-	r.Register(NewAgentListTool())
-	r.Register(NewCronCreateToolWithScheduler(sched))
-	r.Register(NewCronListToolWithScheduler(sched))
+	return r
+}
+
+// APIRegistry returns a registry for API tasks with per-task env vars.
+func APIRegistry(workDir string, env map[string]string) *Registry {
+	r := NewRegistry()
+	r.Register(NewBashWithEnv(workDir, env))
+	r.Register(NewRead(workDir))
+	r.Register(NewWrite(workDir))
+	r.Register(NewEdit(workDir))
+	r.Register(NewGlob(workDir))
+	r.Register(NewGrep(workDir))
+	r.Register(NewWebFetch())
+	r.Register(NewWebSearch())
 	return r
 }

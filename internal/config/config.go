@@ -12,60 +12,16 @@ import (
 
 // Config represents the klaw configuration.
 type Config struct {
-	Defaults     DefaultsConfig                   `toml:"defaults"`
-	Workspace    WorkspaceConfig                  `toml:"workspace"`
-	Provider     map[string]ProviderConfig        `toml:"provider"`
-	Channel      map[string]ChannelConfig         `toml:"channel"`
-	Agents       map[string]AgentInstanceConfig   `toml:"agent"`
-	Server       ServerConfig                     `toml:"server"`
-	OpenAI       OpenAIConfig                     `toml:"openai"`
-	Controller   *ControllerConfig                `toml:"controller"`
-	Logging      LoggingConfig                    `toml:"logging"`
-	SkillsAPIKey string                           `toml:"skills_api_key"`
-}
-
-// OpenAIConfig holds OpenAI-compatible gateway settings.
-type OpenAIConfig struct {
-	Enabled       bool                       `toml:"enabled"`
-	AuthRequired  bool                       `toml:"auth_required"`
-	APIKeys       []string                   `toml:"api_keys"`
-	DefaultModel  string                     `toml:"default_model"`
-	Models        map[string]OpenAIModelMap  `toml:"models"`
-	CORSOrigins   []string                   `toml:"cors_origins"`
-	MaxConcurrent int                        `toml:"max_concurrent"`
-	SkillSources  []SkillSource              `toml:"skill_sources"` // additional repos to install skills from
-}
-
-// OpenAIModelMap maps an OpenAI model ID to a klaw agent and provider.
-type OpenAIModelMap struct {
-	Agent    string   `toml:"agent"`
-	Provider string   `toml:"provider"`
-	Skills   []string `toml:"skills"` // skill names to load; "all" = all installed; empty = all
-}
-
-// SkillSource defines an additional GitHub repo to install skills from.
-type SkillSource struct {
-	Repo   string   `toml:"repo"`   // GitHub URL, e.g. https://github.com/org/repo
-	Skills []string `toml:"skills"` // specific skill names, or ["all"]
-}
-
-// AgentInstanceConfig holds per-agent configuration.
-type AgentInstanceConfig struct {
-	Tools           []string `toml:"tools"`
-	MaxIterations   int      `toml:"max_iterations"`
-	RequireApproval []string `toml:"require_approval"`
-}
-
-// ControllerConfig holds controller connection settings.
-type ControllerConfig struct {
-	Address string `toml:"address"`
-	Token   string `toml:"token"`
+	Defaults  DefaultsConfig            `toml:"defaults"`
+	Workspace WorkspaceConfig           `toml:"workspace"`
+	Provider  map[string]ProviderConfig `toml:"provider"`
+	API       APIConfig                 `toml:"api"`
+	Logging   LoggingConfig             `toml:"logging"`
 }
 
 // DefaultsConfig holds default settings.
 type DefaultsConfig struct {
 	Model          string  `toml:"model"`
-	Agent          string  `toml:"agent"`
 	MaxSessionCost float64 `toml:"max_session_cost"`
 }
 
@@ -83,17 +39,12 @@ type ProviderConfig struct {
 	Fallback   string `toml:"fallback"`
 }
 
-// ChannelConfig holds channel settings.
-type ChannelConfig struct {
-	Enabled bool   `toml:"enabled"`
-	Token   string `toml:"token"`
-	GuildID string `toml:"guild_id"` // Discord
-}
-
-// ServerConfig holds server settings.
-type ServerConfig struct {
-	Port int    `toml:"port"`
-	Host string `toml:"host"`
+// APIConfig holds Creative Agent API settings.
+type APIConfig struct {
+	Port       int `toml:"port"`
+	Host       string `toml:"host"`
+	Workers    int `toml:"workers"`
+	MaxTimeout int `toml:"max_timeout"` // seconds
 }
 
 // LoggingConfig holds logging settings.
@@ -106,7 +57,6 @@ type LoggingConfig struct {
 func Load() (*Config, error) {
 	cfg := defaultConfig()
 
-	// Try to load from file
 	configPath := ConfigPath()
 	if _, err := os.Stat(configPath); err == nil {
 		if _, err := toml.DecodeFile(configPath, cfg); err != nil {
@@ -114,10 +64,7 @@ func Load() (*Config, error) {
 		}
 	}
 
-	// Override with environment variables
 	cfg.applyEnv()
-
-	// Expand paths
 	cfg.expandPaths()
 
 	return cfg, nil
@@ -140,7 +87,7 @@ func StateDir() string {
 	return filepath.Join(home, ".klaw")
 }
 
-// ConfigDir returns the klaw config directory (same as StateDir for now).
+// ConfigDir returns the klaw config directory.
 func ConfigDir() string {
 	return StateDir()
 }
@@ -167,17 +114,14 @@ func defaultConfig() *Config {
 	return &Config{
 		Defaults: DefaultsConfig{
 			Model: "claude-sonnet-4-20250514",
-			Agent: "default",
 		},
-		Workspace: WorkspaceConfig{
-			Path: "",
-		},
-		Provider: make(map[string]ProviderConfig),
-		Channel:  make(map[string]ChannelConfig),
-		Agents:   make(map[string]AgentInstanceConfig),
-		Server: ServerConfig{
-			Port: 8080,
-			Host: "127.0.0.1",
+		Workspace: WorkspaceConfig{},
+		Provider:  make(map[string]ProviderConfig),
+		API: APIConfig{
+			Port:       8081,
+			Host:       "0.0.0.0",
+			Workers:    50,
+			MaxTimeout: 600,
 		},
 		Logging: LoggingConfig{
 			Level: "info",
@@ -186,44 +130,26 @@ func defaultConfig() *Config {
 }
 
 func (c *Config) applyEnv() {
-	// Anthropic
 	if key := os.Getenv("ANTHROPIC_API_KEY"); key != "" {
 		p := c.Provider["anthropic"]
 		p.APIKey = key
 		c.Provider["anthropic"] = p
 	}
 
-	// OpenAI
-	if key := os.Getenv("OPENAI_API_KEY"); key != "" {
-		p := c.Provider["openai"]
+	if key := os.Getenv("EACHLABS_API_KEY"); key != "" {
+		p := c.Provider["eachlabs"]
 		p.APIKey = key
-		c.Provider["openai"] = p
+		c.Provider["eachlabs"] = p
 	}
 
-	// Telegram
-	if token := os.Getenv("TELEGRAM_BOT_TOKEN"); token != "" {
-		ch := c.Channel["telegram"]
-		ch.Token = token
-		ch.Enabled = true
-		c.Channel["telegram"] = ch
+	if key := os.Getenv("OPENROUTER_API_KEY"); key != "" {
+		p := c.Provider["openrouter"]
+		p.APIKey = key
+		c.Provider["openrouter"] = p
 	}
 
-	// Discord
-	if token := os.Getenv("DISCORD_BOT_TOKEN"); token != "" {
-		ch := c.Channel["discord"]
-		ch.Token = token
-		ch.Enabled = true
-		c.Channel["discord"] = ch
-	}
-
-	// Model override
 	if model := os.Getenv("KLAW_MODEL"); model != "" {
 		c.Defaults.Model = model
-	}
-
-	// Skills API key
-	if key := os.Getenv("KLAW_SKILLS_API_KEY"); key != "" {
-		c.SkillsAPIKey = key
 	}
 }
 
@@ -248,7 +174,6 @@ func (c *Config) expandPaths() {
 func (c *Config) Save() error {
 	configPath := ConfigPath()
 
-	// Ensure directory exists
 	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
 		return err
 	}
@@ -265,11 +190,7 @@ func (c *Config) Save() error {
 
 // EnsureDirs creates necessary directories.
 func EnsureDirs() error {
-	dirs := []string{
-		StateDir(),
-		SessionsDir(),
-		LogsDir(),
-	}
+	dirs := []string{StateDir(), SessionsDir(), LogsDir()}
 
 	for _, dir := range dirs {
 		if err := os.MkdirAll(dir, 0755); err != nil {
