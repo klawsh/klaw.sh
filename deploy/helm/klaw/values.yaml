@@ -1,0 +1,124 @@
+# Default values for klaw. Nothing in this chart is specific to a cloud provider.
+
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  # No image is published by the project yet - build from the Containerfile
+  # at the repo root and point this at your registry.
+  repository: ghcr.io/klawsh/klaw
+  # Defaults to the chart appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+# Shared by controller and node pods. Cloud identity (AWS IRSA, GKE Workload
+# Identity, Azure Workload Identity, ...) is configured through annotations/labels.
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+  # The klaw processes do not call the Kubernetes API.
+  automount: false
+
+# Shared secret nodes use to authenticate to the controller.
+auth:
+  # Use an existing Secret holding the token under the key "token".
+  existingSecret: ""
+  # Plain value. If both this and existingSecret are empty, a random token is
+  # generated on first install and kept on upgrade.
+  token: ""
+
+anthropic:
+  # Use an existing Secret holding the key under "ANTHROPIC_API_KEY".
+  existingSecret: ""
+  # Plain value; prefer existingSecret outside of tests.
+  apiKey: ""
+
+# Applied to every pod. Defaults satisfy the "restricted" Pod Security Standard.
+# On OpenShift let the SCC assign the UID:
+#   --set podSecurityContext.runAsUser=null,podSecurityContext.runAsGroup=null,podSecurityContext.fsGroup=null
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: [ALL]
+
+controller:
+  # State is stored on disk and the etcd store is not implemented upstream yet,
+  # so exactly one replica is supported.
+  port: 9090
+  service:
+    type: ClusterIP
+    port: 9090
+    annotations: {}
+  persistence:
+    enabled: true
+    existingClaim: ""
+    # "" uses the cluster default StorageClass, "-" disables dynamic provisioning.
+    storageClass: ""
+    accessModes: [ReadWriteOnce]
+    size: 1Gi
+    annotations: {}
+  resources: {}
+  extraEnv: []
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+  priorityClassName: ""
+
+node:
+  enabled: true
+  # Deployment (default) or DaemonSet.
+  kind: Deployment
+  # Ignored for DaemonSet and when autoscaling is enabled.
+  replicas: 1
+  resources: {}
+  extraEnv: []
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+  priorityClassName: ""
+  # Scratch space for the working directory the agent tools run in.
+  workspace:
+    sizeLimit: 1Gi
+  # Deployment only.
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 80
+    targetMemoryUtilizationPercentage: null
+  # Deployment only.
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: null
+    maxUnavailable: null
+
+# klaw cluster/namespace that nodes run agents for.
+cluster:
+  name: default
+  namespace: default
+
+# Agents seeded into every node (same JSON schema as `klaw create agent`).
+agents: []
+# - name: coder
+#   description: Writes code
+#   model: claude-sonnet-4-20250514
+#   systemPrompt: You are a coding assistant.
+#   skills: [code-exec, git]

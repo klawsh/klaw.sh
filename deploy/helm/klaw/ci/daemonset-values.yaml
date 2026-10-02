@@ -1,0 +1,4 @@
+anthropic:
+  apiKey: test-key-not-real
+node:
+  kind: DaemonSet

@@ -1,0 +1,105 @@
+{{- $persist := .Values.controller.persistence }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "klaw.fullname" . }}-controller
+  labels:
+    {{- include "klaw.labels" . | nindent 4 }}
+    app.kubernetes.io/component: controller
+spec:
+  # File-backed state: more than one replica would diverge.
+  replicas: 1
+  serviceName: {{ include "klaw.fullname" . }}-controller
+  selector:
+    matchLabels:
+      {{- include "klaw.selectorLabels" (dict "root" . "component" "controller") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "klaw.labels" . | nindent 8 }}
+        app.kubernetes.io/component: controller
+        {{- with .Values.controller.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.controller.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- include "klaw.podCommon" . | nindent 6 }}
+      {{- include "klaw.scheduling" .Values.controller | nindent 6 }}
+      containers:
+        - name: controller
+          image: {{ include "klaw.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - controller
+            - start
+            - --port={{ .Values.controller.port }}
+            - --token=$(KLAW_TOKEN)
+          env:
+            - name: KLAW_STATE_DIR
+              value: /var/lib/klaw
+            - name: KLAW_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "klaw.authSecretName" . }}
+                  key: token
+            {{- with .Values.controller.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          ports:
+            - name: grpc
+              containerPort: {{ .Values.controller.port }}
+          # The controller only speaks gRPC and has no HTTP health endpoint.
+          readinessProbe:
+            tcpSocket:
+              port: grpc
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: grpc
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          {{- with .Values.controller.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/klaw
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        {{- if $persist.existingClaim }}
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ $persist.existingClaim }}
+        {{- else if not $persist.enabled }}
+        - name: data
+          emptyDir: {}
+        {{- end }}
+  {{- if and $persist.enabled (not $persist.existingClaim) }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        {{- with $persist.annotations }}
+        annotations:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+      spec:
+        accessModes:
+          {{- toYaml $persist.accessModes | nindent 10 }}
+        {{- if eq $persist.storageClass "-" }}
+        storageClassName: ""
+        {{- else if $persist.storageClass }}
+        storageClassName: {{ $persist.storageClass | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ $persist.size }}
+  {{- end }}

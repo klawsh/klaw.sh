@@ -1,6 +1,7 @@
 # Build artifacts
 bin/
 klaw
+!deploy/helm/klaw/
 *.exe
 
 # Dependencies

@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "klaw.fullname" . }}-controller
+  labels:
+    {{- include "klaw.labels" . | nindent 4 }}
+    app.kubernetes.io/component: controller
+  {{- with .Values.controller.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.controller.service.type }}
+  ports:
+    - name: grpc
+      port: {{ .Values.controller.service.port }}
+      targetPort: grpc
+      appProtocol: grpc
+  selector:
+    {{- include "klaw.selectorLabels" (dict "root" . "component" "controller") | nindent 4 }}

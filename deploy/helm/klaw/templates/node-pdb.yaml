@@ -1,0 +1,21 @@
+{{- if and .Values.node.enabled (eq .Values.node.kind "Deployment") .Values.node.podDisruptionBudget.enabled }}
+{{- $p := .Values.node.podDisruptionBudget }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "klaw.fullname" . }}-node
+  labels:
+    {{- include "klaw.labels" . | nindent 4 }}
+    app.kubernetes.io/component: node
+spec:
+  {{- if $p.minAvailable }}
+  minAvailable: {{ $p.minAvailable }}
+  {{- else if $p.maxUnavailable }}
+  maxUnavailable: {{ $p.maxUnavailable }}
+  {{- else }}
+  {{- fail "node.podDisruptionBudget needs minAvailable or maxUnavailable" }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "klaw.selectorLabels" (dict "root" . "component" "node") | nindent 6 }}
+{{- end }}

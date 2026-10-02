@@ -1,0 +1,27 @@
+anthropic:
+  apiKey: test-key-not-real
+auth:
+  token: test-token-not-real
+node:
+  replicas: 2
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+agents:
+  - name: coder
+    description: Writes code
+    model: claude-sonnet-4-20250514
+    systemPrompt: You are a coding assistant.
+    skills: [code-exec, git]
+serviceAccount:
+  annotations:
+    example.com/workload-identity: placeholder
+imagePullSecrets:
+  - name: regcred
+controller:
+  persistence:
+    size: 2Gi

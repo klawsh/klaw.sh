@@ -1,0 +1,22 @@
+{{- if .Values.node.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "klaw.fullname" . }}-node-seed
+  labels:
+    {{- include "klaw.labels" . | nindent 4 }}
+    app.kubernetes.io/component: node
+data:
+  context.json: |
+    {{- dict "current_cluster" .Values.cluster.name "current_namespace" .Values.cluster.namespace | toPrettyJson | nindent 4 }}
+  {{- range .Values.agents }}
+  {{- $agent := dict "name" (required "agents[].name is required" .name) "cluster" $.Values.cluster.name "namespace" $.Values.cluster.namespace "description" (default "" .description) }}
+  {{- if .systemPrompt }}{{ $_ := set $agent "system_prompt" .systemPrompt }}{{ end }}
+  {{- if .model }}{{ $_ := set $agent "model" .model }}{{ end }}
+  {{- if .tools }}{{ $_ := set $agent "tools" .tools }}{{ end }}
+  {{- if .skills }}{{ $_ := set $agent "skills" .skills }}{{ end }}
+  {{- if .triggers }}{{ $_ := set $agent "triggers" .triggers }}{{ end }}
+  agent.{{ .name }}.json: |
+    {{- $agent | toPrettyJson | nindent 4 }}
+  {{- end }}
+{{- end }}

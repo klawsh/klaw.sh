@@ -1,0 +1,122 @@
+{{- if .Values.node.enabled }}
+{{- $node := .Values.node }}
+{{- if not (has $node.kind (list "Deployment" "DaemonSet")) }}
+{{- fail "node.kind must be Deployment or DaemonSet" }}
+{{- end }}
+apiVersion: apps/v1
+kind: {{ $node.kind }}
+metadata:
+  name: {{ include "klaw.fullname" . }}-node
+  labels:
+    {{- include "klaw.labels" . | nindent 4 }}
+    app.kubernetes.io/component: node
+spec:
+  {{- if and (eq $node.kind "Deployment") (not $node.autoscaling.enabled) }}
+  replicas: {{ $node.replicas }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "klaw.selectorLabels" (dict "root" . "component" "node") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "klaw.labels" . | nindent 8 }}
+        app.kubernetes.io/component: node
+        {{- with $node.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        checksum/seed: {{ include (print $.Template.BasePath "/node-configmap.yaml") . | sha256sum }}
+        {{- with $node.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- include "klaw.podCommon" . | nindent 6 }}
+      {{- include "klaw.scheduling" $node | nindent 6 }}
+      initContainers:
+        # Nodes read the cluster context and agent bindings from local files.
+        - name: seed-state
+          image: {{ include "klaw.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: [/bin/sh, -ec]
+          args:
+            - |
+              dir="$KLAW_STATE_DIR/agents/$KLAW_CLUSTER/$KLAW_NAMESPACE"
+              mkdir -p "$dir"
+              cp /seed/context.json "$KLAW_STATE_DIR/context.json"
+              for f in /seed/agent.*.json; do
+                [ -e "$f" ] || continue
+                cp "$f" "$dir/${f#/seed/agent.}"
+              done
+          env:
+            - name: KLAW_STATE_DIR
+              value: /var/lib/klaw
+            - name: KLAW_CLUSTER
+              value: {{ .Values.cluster.name | quote }}
+            - name: KLAW_NAMESPACE
+              value: {{ .Values.cluster.namespace | quote }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          volumeMounts:
+            - name: state
+              mountPath: /var/lib/klaw
+            - name: seed
+              mountPath: /seed
+              readOnly: true
+      containers:
+        - name: node
+          image: {{ include "klaw.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          workingDir: /workspace
+          args:
+            - node
+            - start
+            - {{ include "klaw.controllerAddress" . }}
+            - --token=$(KLAW_TOKEN)
+            # `klaw node start` leaves the name empty unless it is passed explicitly.
+            - --name=$(POD_NAME)
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: KLAW_STATE_DIR
+              value: /var/lib/klaw
+            - name: KLAW_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "klaw.authSecretName" . }}
+                  key: token
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "klaw.anthropicSecretName" . }}
+                  key: ANTHROPIC_API_KEY
+            {{- with $node.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with $node.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          volumeMounts:
+            - name: state
+              mountPath: /var/lib/klaw
+            - name: workspace
+              mountPath: /workspace
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: state
+          emptyDir: {}
+        - name: workspace
+          emptyDir:
+            sizeLimit: {{ $node.workspace.sizeLimit }}
+        - name: tmp
+          emptyDir: {}
+        - name: seed
+          configMap:
+            name: {{ include "klaw.fullname" . }}-node-seed
+{{- end }}

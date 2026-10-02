@@ -1,0 +1,14 @@
+klaw controller: {{ include "klaw.controllerAddress" . }} (gRPC, in-cluster)
+{{- if .Values.node.enabled }}
+klaw nodes:      {{ .Values.node.kind }} {{ include "klaw.fullname" . }}-node, agents seeded: {{ len .Values.agents }}
+{{- else }}
+klaw nodes:      disabled (node.enabled=false)
+{{- end }}
+
+Node-to-controller traffic is plaintext gRPC. Keep it on a trusted network or
+use a mesh/NetworkPolicy.
+{{- if not .Values.auth.existingSecret }}
+
+Shared token:
+  kubectl -n {{ .Release.Namespace }} get secret {{ include "klaw.authSecretName" . }} -o jsonpath='{.data.token}' | base64 -d
+{{- end }}
